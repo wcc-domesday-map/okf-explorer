@@ -11,7 +11,7 @@ bundles:
     "@type": okf:Bundle
     title: Warwickshire Public Knowledge
     description: Governed public Warwickshire service, open-data, GeoServer and news metadata. SearchOut remains inventory-only pending written reuse permission.
-    version: 0.2.0-demo.2
+    version: 0.2.0-demo.3
     status: demo
     descriptor:
       "@id": ../okf/warwickshire-public/okf-bundle.json
