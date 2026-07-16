@@ -1,5 +1,44 @@
 # Changelog
 
+All notable changes to the Warwickshire same-origin profile are recorded here.
+
+## [Unreleased]
+
+## [0.4.3-warwickshire.1] - 2026-07-16
+
+### Added
+
+- Added an accessible FOI-oriented provenance panel for Warwickshire
+  small-bundle records, including source identifiers, retrieval/publication
+  times, attribution, rights, reuse basis, confidence, method, facts, cautions
+  and source body.
+- Added visible relationship provenance and bundle-relative evidence links.
+- Documented the parent-owned `/knowledge/` and
+  `/okf/warwickshire-public/` assembly contract.
+
+### Changed
+
+- Defaulted Explorer and its registry to the co-published Warwickshire public
+  bundle and labelled this package as the Warwickshire same-origin profile.
+- Resolved relative provenance and resource links from the loaded bundle URL
+  while retaining safe explicit external source links.
+- Relabelled cross-origin source JSON, map preview and legislation live-text
+  actions as unavailable instead of allowing Explorer to request them.
+
+### Security
+
+- Restricted network bundles, descriptors, moved-bundle redirects and resource
+  fetches to the serving origin, added a hash-compatible CSP with
+  `connect-src 'self'`, and rejected fetch redirects.
+- Retained local file upload while sanitising bundle-controlled links and
+  preventing uploaded content from establishing a network base.
+- Replaced the inherited automatic public Pages deployment with a
+  manual, fail-closed guard; the restricted parent repository is the only
+  supported deployment path.
+- Added unit and browser regressions for malicious URLs, same-origin resources,
+  external-link-only controls, provenance rendering and the core small-bundle
+  views.
+
 ## v0.4.2 - 2026-07-11 - Explorer identity alignment
 
 - Aligned the private Explorer package and citation metadata with the current
@@ -55,11 +94,11 @@
   series, closing the low-severity `GHSA-pxg6-pf52-xh8x` alert reported after
   the repository rename.
 
-All notable changes to this repository are recorded here. Entries are grouped by
-date and describe the user-visible publication effect, validation run, and any
-source-of-truth changes.
+## Upstream development included at the fork point
 
-## Unreleased
+These entries describe upstream development present when the Warwickshire
+profile was created. They are retained for lineage and are not the active
+Warwickshire `Unreleased` section.
 
 - Updated the SvelteKit, Svelte, Vite and `svelte-check` development stack while
   retaining TypeScript 6.0.3 until the Svelte checker supports TypeScript 7's

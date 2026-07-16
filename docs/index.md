@@ -5,6 +5,9 @@ APIs exemplar, and related large-corpus OKF packs.
 
 ## Start Here
 
+- [Warwickshire same-origin profile](warwickshire-same-origin-profile.md)
+  defines this fork's parent-owned route layout, network boundary, provenance
+  presentation, validation and organisation-promotion process.
 - [Repository guide](repository-guide.md) explains where the important files
   live and how the publication pipeline fits together.
 - [Use the OKF Explorer](use-okf-explorer.md) remains the short path from a

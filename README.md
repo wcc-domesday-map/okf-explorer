@@ -1,11 +1,60 @@
-# okf-explorer
+# OKF Explorer — Warwickshire same-origin profile
 
-Static explorer and bundle tooling for Open Knowledge Format (OKF) wikis.
+This is the Warwickshire County Council organisation fork/build profile of
+[the upstream OKF Explorer](https://github.com/chris-page-gov/okf-explorer).
+Profile version `0.4.3-warwickshire.1` derives from upstream `0.4.2` at commit
+`c4ecb7e1`. Warwickshire-specific security, provenance and deployment choices
+are intentionally documented as a divergence rather than attributed upstream.
 
-## Open The Hosted Explorer
+The application is a **served-only fragment assembled by the private parent
+repository**. That parent publishes the Explorer at `/knowledge/` and a
+separately reviewed public bundle at
+`/okf/warwickshire-public/okf-bundle.json`. The default application-relative
+bundle path is therefore `../okf/warwickshire-public/okf-bundle.json`.
 
-The Svelte OKF Explorer can load OKF bundles from this repository or from any
-other public HTTPS URL. These hosted examples open without installation:
+Warwickshire's network boundary is deliberately narrow:
+
+- network bundles, descriptors, redirects and on-demand data resources must
+  resolve on the Explorer's own origin;
+- safe explicit HTTP(S) provenance and official-source links remain ordinary
+  user-navigable links, but Explorer does not fetch external targets;
+- local JSON file upload remains available and stays in the browser;
+- the build must be served over HTTP(S); opening `build/index.html` with
+  `file://` is unsupported because browser fetch and CSP rules require an
+  origin; and
+- the public and internal applications/bundles are separate deployment
+  surfaces. No internal record may be shipped in a public browser bundle.
+
+See [the Warwickshire profile contract](docs/warwickshire-same-origin-profile.md)
+for the route layout, security boundary, validation and promotion process.
+The inherited standalone Pages workflow is fail-closed; only the restricted
+parent repository may assemble and deploy this profile.
+
+## Build For Parent Assembly Or A Matching Standalone Host
+
+```sh
+cd apps/okf-explorer
+pnpm install --frozen-lockfile
+pnpm check
+pnpm test
+pnpm test:e2e
+pnpm build
+```
+
+`apps/okf-explorer/build/` contains only the Explorer application. A review
+server or standalone host must reproduce the parent layout: serve that build
+at `/knowledge/` and place the reviewed bundle at sibling URL
+`/okf/warwickshire-public/okf-bundle.json`. Equivalently, when reviewing the
+build directory as a unit, the default `../okf/warwickshire-public/` reference
+must resolve to the sibling public bundle. The parent repository's existing
+Pages assembly—Explorer under `/knowledge/`, bundle under `/okf/`—is the
+authoritative and supported deployment.
+
+## Upstream Hosted Examples (Reference Only)
+
+The upstream generic Explorer can load public cross-origin HTTPS bundles. That
+capability and the hosted examples below are **not enabled in this Warwickshire
+same-origin profile**; they remain here solely as upstream product reference:
 
 | Example | What it demonstrates | Open |
 |---|---|---|
@@ -132,9 +181,10 @@ The repository contains:
   Markdown corpus.
 - `sources-index.md` and `log.md` - source and provenance indexes.
 
-## Read Locally
+## Upstream Local Assembly Reference
 
-Run `python3 scripts/build_site.py`, serve `_site/` as the local web root, and
+The following describes the retained upstream sample-corpus assembly, not the
+Warwickshire parent deployment. Run `python3 scripts/build_site.py`, serve `_site/` as the local web root, and
 open `http://127.0.0.1:8002/next/` to review the canonical Svelte Explorer.
 The root Pages URL redirects to `next/`, while the dependency-free
 compatibility Explorer remains available at `legacy/`. The legacy single-file
@@ -152,17 +202,18 @@ bundles can embed analysis inline while large bundles reference chunked
 analysis artifacts. [Geospatial Map exploration](docs/geospatial-map-exploration.md)
 defines the Map evidence levels and progressive recovery model.
 
-## Relationship To The CKAN Fixture
+## Upstream Relationship To The CKAN Fixture (Reference Only)
 
-This repository is the generic OKF Explorer product repo: it owns the Svelte
+In the upstream generic project, this repository owns the Svelte
 Explorer, bundle conventions, reusable viewer behaviour, registry examples, and
 the AI infrastructure sample bundle. The GOV.UK CKAN large-corpus fixture lives
 in
 [`ai-engineering-lab-hackathon-london-2026`](https://github.com/chris-page-gov/ai-engineering-lab-hackathon-london-2026)
 because that repository preserves the historical path from the original dark
 data challenge to the generalized OKF large-corpus builder. The CKAN descriptor
-is listed in `okf-registry.json` so this Explorer can load and validate that
-external bundle without copying its generated corpus here.
+is listed in the upstream registry. This Warwickshire profile does not load
+that external bundle; the history is retained to explain the inherited corpus
+tooling and evaluation fixtures.
 
 Direct CKAN example:
 [GOV.UK CKAN in the hosted Svelte Explorer][ckan-example]
@@ -175,12 +226,11 @@ CKAN data-catalogue exemplar.
 
 ## Svelte Explorer
 
-The Svelte implementation is built as a static app and is the canonical OKF
-Explorer product source. It supports the existing monolithic `okf-bundle.json`
-reader and the large-corpus `okf-explorer.json` descriptor path with
-worker-backed static search, lazy full-record hydration, relationship graph
-loading, scoped timeline/link/type/resource views, resource stacks, persistent
-bundle URL history, and route-addressable detail panels.
+The Svelte implementation is built as a static app. In this fork it is the
+Warwickshire same-origin application source and is deployed only through the
+parent assembly contract described above. Upstream support for generic
+monolithic bundles and large-corpus descriptors remains in the codebase, but
+network loading is constrained to the serving origin.
 
 ```sh
 cd apps/okf-explorer
@@ -191,12 +241,13 @@ pnpm test:e2e
 pnpm build
 ```
 
-When `apps/okf-explorer/build/` exists, `python3 scripts/build_site.py` copies
-it to `_site/next/`. The root `index.html` redirects to `next/` and preserves
-query-string and hash routes, so published root links use the canonical Svelte
-Explorer. The old dependency-free Explorer is copied to `_site/legacy/`.
+The upstream `python3 scripts/build_site.py` assembly into `_site/next/` is not
+the Warwickshire publication path. For this profile, copy the generated build
+to the parent site's `/knowledge/` route and co-publish only the reviewed public
+bundle at `/okf/warwickshire-public/`. A standalone review host must reproduce
+those sibling routes; the application build is not complete on its own.
 
-## Validate And Build
+## Upstream Sample-Corpus Validation (Reference Only)
 
 ```sh
 python3 scripts/build_uk_government_api_okf.py --check
@@ -211,7 +262,8 @@ node scripts/evaluate_okf_explorer.mjs --base-url http://127.0.0.1:8002/next/ --
 node scripts/evaluate_okf_explorer.mjs --base-url http://127.0.0.1:8002/next/ --suite evaluation/gov-ckan/questions.json --limit 100
 ```
 
-The build writes a GitHub Pages-ready static site to `_site/`. The site uses a
+The retained upstream assembly writes a generic Pages-ready static site to
+`_site/`; it is not a Warwickshire deployment artifact. The upstream site uses a
 root redirect into the Svelte Explorer, publishes the Svelte Explorer under
 `next/`, publishes the compatibility Explorer under `legacy/`, preserves
 `viewer.html` and `view.html`, publishes the UK Government APIs large-corpus
@@ -252,9 +304,11 @@ The viewer and build/validation scripts are licensed under the
 
 ## GitHub Pages
 
-The included workflow publishes the static site from `_site/` when pushed to
-`main`, after validation passes. In the GitHub repository settings, configure
-Pages to use **GitHub Actions** as the source.
+Standalone GitHub Pages publication is disabled for this fork. The included
+workflow is a manual fail-closed guard with read-only repository permission and
+no Pages deployment action. Configure and deploy the organisation-restricted
+site only in the parent repository after its visibility, merged-ref, review and
+public-bundle checks pass.
 
 [ckan-example]: https://chris-page-gov.github.io/okf-explorer/?bundle=https%3A%2F%2Fchris-page-gov.github.io%2Fai-engineering-lab-hackathon-london-2026%2Fgov-ckan%2Fokf-explorer.json&view=reader#overview
 [uk-government-apis-example]: https://chris-page-gov.github.io/okf-explorer/?bundle=https%3A%2F%2Fchris-page-gov.github.io%2Fai-infrastructure-wiki%2Fuk-government-apis%2Fokf-explorer.json&view=reader#overview

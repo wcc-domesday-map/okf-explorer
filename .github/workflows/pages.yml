@@ -1,90 +1,20 @@
-name: Publish GitHub Pages
+name: Warwickshire standalone Pages guard
 
+# This localized Explorer is only a served application fragment. The private
+# parent repository assembles it at /knowledge/ beside the reviewed public
+# bundle at /okf/warwickshire-public/. Publishing this repository on its own
+# would omit that sibling bundle and could create an unintended public surface.
 on:
-  push:
-    branches: ["main"]
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
 
 jobs:
-  build:
+  standalone-pages-disabled:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v7
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          version: 10
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: apps/okf-explorer/pnpm-lock.yaml
-
-      - name: Install OKF Explorer dependencies
-        working-directory: apps/okf-explorer
-        run: pnpm install --frozen-lockfile
-
-      - name: Validate Svelte OKF Explorer
-        working-directory: apps/okf-explorer
-        run: pnpm check
-
-      - name: Build Svelte OKF Explorer
-        working-directory: apps/okf-explorer
-        run: pnpm build
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
-      - name: Install semantic OKF dependencies
-        run: python3 -m pip install -r requirements-okf.txt
-
-      - name: Validate YAML-LD registry and constraint ledger
+      - name: Refuse standalone publication
         run: |
-          python3 scripts/build_okf_registry.py --check
-          python3 scripts/check_source_constraints.py
-
-      - name: Validate OKF bundle
-        run: python3 scripts/check_okf.py
-
-      - name: Validate OKF Explorer bundle
-        run: python3 scripts/build_okf_bundle.py --check
-
-      - name: Validate legislation corpus
-        run: python3 scripts/check_legislation_okf.py
-
-      - name: Build static site
-        run: python3 scripts/build_site.py
-
-      - name: Configure Pages
-        uses: actions/configure-pages@v6
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v5
-        with:
-          path: _site
-
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v5
+          echo "::error::Standalone GitHub Pages publication is disabled for the Warwickshire profile. Build and deploy it only through the restricted parent repository, which assembles /knowledge/ and /okf/warwickshire-public/."
+          exit 1

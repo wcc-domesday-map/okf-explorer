@@ -1,64 +1,45 @@
-# Publication Plan
+# Warwickshire publication profile
 
-Status: public GitHub Pages deployment is active. Release snapshots are cut
-from `main` with semantic tags such as `v0.3.0`.
+Status: standalone publication disabled. The restricted parent repository owns
+assembly, review and deployment of the Warwickshire demonstration.
 
-## Public Surfaces
+## Authoritative surfaces
 
-- Repository: canonical OKF Explorer source, sample OKF Markdown corpus,
-  provenance, issues, pull requests, and review history.
-- GitHub Pages: public root redirects to the canonical Svelte OKF Explorer
-  under `next/`, preserving query-string and hash routes.
-- Svelte Explorer: when `apps/okf-explorer/build/` exists, the Pages build
-  publishes the canonical Vite 8 / SvelteKit implementation under `next/`.
-- Legacy Explorer: the dependency-free compatibility Explorer is published
-  explicitly under `legacy/`, while `viewer.html` and `view.html` remain the
-  single-file legacy viewer surfaces.
-- GitHub Releases: versioned snapshots of the explorer, OKF bundle, legacy
-  viewer, and sample corpus.
-- UK Legislation: the complete static work catalogue is published at
-  `legislation/okf-explorer.json`; selected works progressively load their
-  authoritative CLML subdivision tree from legislation.gov.uk.
-- UK Legislation documentation: the maintained spine is published under
-  `docs/uk-legislation/`, with screenshot assets and their refresh manifest
-  under `docs/assets/uk-legislation-manual/`.
-- Optional DOI: connect the public repository to Zenodo after the first release
-  if a persistent scholarly citation is required.
+- Parent repository: pins the reviewed Explorer revision and owns the feature
+  branch, pull request, approval and visibility checks.
+- `/knowledge/`: parent-assembled static Explorer application.
+- `/okf/warwickshire-public/`: physically separate, reviewed public OKF bundle
+  and bundle-relative public resources.
+- Internal application and bundle: a separate protected surface; never copied
+  into, proxied by, or hidden inside the public browser artifact.
 
-## Release Steps
+This repository's application build is a served-only fragment. It must not be
+published at a standalone Pages root because it does not contain the sibling
+Warwickshire bundle. The inherited Pages workflow is manual and intentionally
+fails with an explanatory error. It has no Pages write or identity-token
+permission and runs no deployment action.
 
-1. Run the publication checks below.
-2. Commit and push the release state to `main`.
-3. Create an annotated semantic tag, for example `v0.3.0`.
-4. Push the tag.
-5. Publish a GitHub Release using the matching changelog section as release
-   notes.
-6. Verify the Pages workflow and the hosted Explorer URL.
+## Parent release gate
 
-## Publication Checks
+Before the parent repository publishes a revision:
 
-Run these before publishing or cutting a release:
+1. Confirm the ref is merged and approved by at least one independent human.
+2. Confirm repository and Pages visibility match the organisation-restricted
+   delivery requirement.
+3. Build and validate Explorer from the pinned submodule revision.
+4. Copy the application only to `/knowledge/`.
+5. Copy only the reviewed public bundle to `/okf/warwickshire-public/`.
+6. Scan the assembled site for credentials, internal hosts and internal data.
+7. Verify CSP and same-origin network behavior in the served artifact.
+8. Exercise the default bundle, provenance links, disabled external previews,
+   local file upload and the core Reader/Graph/Links/Type views.
 
-```sh
-cd apps/okf-explorer && pnpm install && pnpm check && pnpm build && cd ../..
-python3 scripts/build_uk_government_api_okf.py --check
-python3 scripts/check_legislation_okf.py
-python3 scripts/build_legislation_evaluation.py
-python3 scripts/build_okf_bundle.py --check
-python3 scripts/update_viewer.py --check
-python3 scripts/check_okf.py
-python3 scripts/build_site.py
-```
+Validation commands and the complete route/security contract are maintained in
+[`docs/warwickshire-same-origin-profile.md`](docs/warwickshire-same-origin-profile.md).
 
-The Pages build includes the canonical Svelte Explorer, generated OKF bundle,
-UK Government APIs and UK Legislation large-corpus exemplars, the legal-answer
-evaluation suite, public OKF Markdown corpus, explicit
-legacy Explorer route, and legacy viewer, and excludes Word lock files,
-`.DS_Store`, Git internals, temporary files, and generated caches.
+## Upstream publication history
 
-## Current Svelte Coverage
-
-The Svelte Explorer covers monolithic OKF bundles and large-corpus descriptors.
-Large-corpus startup remains overview-only; static search stays worker-backed;
-full dataset/resource/publisher chunks hydrate only for detail/filter/timeline/
-type/resource views; relationship chunks hydrate only for graph/link views.
+Upstream OKF Explorer public Pages and release instructions are historical
+reference only for this fork. They are not authority to enable a standalone
+public deployment, external bundle loading or cross-origin previews in the
+Warwickshire profile.
