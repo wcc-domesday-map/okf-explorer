@@ -1,18 +1,30 @@
 <script lang="ts">
   import type { LargeDataset, SearchResultDoc } from '$lib/types';
+  import { publicHttpHrefForBundle, sameOriginResourceUrl } from '$lib/security/urlPolicy';
   import { parseClml, type LegislationProvision } from './structure';
 
-  let { record }: { record: Partial<LargeDataset & SearchResultDoc> } = $props();
+  let { record, bundleUrl }: { record: Partial<LargeDataset & SearchResultDoc>; bundleUrl: string } = $props();
   let provisions = $state<LegislationProvision[]>([]);
   let loading = $state(false);
   let error = $state('');
   let filter = $state('');
   let limit = $state(120);
 
+  function safeHref(value: unknown): string {
+    return publicHttpHrefForBundle(value, bundleUrl, location.href) || '';
+  }
+
+  function safeFetchHref(value: unknown): string {
+    return sameOriginResourceUrl(value, bundleUrl, location.href) || '';
+  }
+
   const isLegislation = $derived(record.record_type === 'Legislation Work' || Boolean(record.legislation_id_uri));
-  const documentUri = $derived(record.document_uri || record.url || '');
-  const structureUrl = $derived(record.structure_url || (documentUri ? `${documentUri.replace(/\/$/, '')}/data.xml` : ''));
-  const manifestations = $derived(Object.entries(record.manifestations || {}).filter(([, url]) => /^https?:\/\//.test(url)));
+  const rawDocumentUri = $derived(record.document_uri || record.url || '');
+  const documentUri = $derived(safeHref(rawDocumentUri));
+  const rawStructureUrl = $derived(record.structure_url || (documentUri ? `${documentUri.replace(/\/$/, '')}/data.xml` : ''));
+  const structureUrl = $derived(safeHref(rawStructureUrl));
+  const structureFetchUrl = $derived(safeFetchHref(rawStructureUrl));
+  const manifestations = $derived(Object.entries(record.manifestations || {}));
   const visibleProvisions = $derived.by(() => {
     const query = filter.trim().toLowerCase();
     const rows = query
@@ -22,11 +34,14 @@
   });
 
   async function loadStructure() {
-    if (!structureUrl || loading) return;
+    if (!structureFetchUrl || loading) return;
     loading = true;
     error = '';
     try {
-      const response = await fetch(structureUrl, { headers: { Accept: 'application/xml, text/xml;q=0.9' } });
+      const response = await fetch(structureFetchUrl, {
+        headers: { Accept: 'application/xml, text/xml;q=0.9' },
+        redirect: 'error'
+      });
       if (!response.ok) throw new Error(`Official CLML request failed (${response.status})`);
       provisions = parseClml(await response.text(), documentUri);
       if (!provisions.length) throw new Error('No normalized structural elements were found in the official CLML response.');
@@ -50,7 +65,7 @@
     <dl>
       <dt>ELI class</dt><dd><code>{record.eli_class || 'eli:LegalResource'}</code></dd>
       <dt>Schema.org class</dt><dd><code>{record.schema_org_type || 'schema:Legislation'}</code></dd>
-      <dt>Official identifier</dt><dd>{#if record.legislation_id_uri}<a href={record.legislation_id_uri} target="_blank" rel="noopener">{record.legislation_id_uri}</a>{:else}Not supplied{/if}</dd>
+      <dt>Official identifier</dt><dd>{#if record.legislation_id_uri}{#if safeHref(record.legislation_id_uri)}<a href={safeHref(record.legislation_id_uri)} target="_blank" rel="noopener noreferrer">{record.legislation_id_uri}</a>{:else}{record.legislation_id_uri}{/if}{:else}Not supplied{/if}</dd>
       <dt>Document type</dt><dd>{record.document_type || record.type_code || 'Not supplied'}</dd>
       <dt>Category</dt><dd>{record.category || 'Not supplied'}</dd>
       <dt>Year / number</dt><dd>{[record.year, record.number].filter(Boolean).join(' / ') || 'Not supplied'}</dd>
@@ -59,10 +74,10 @@
     </dl>
 
     <div class="law-actions">
-      {#if documentUri}<a class="law-button" href={documentUri} target="_blank" rel="noopener">Open official work</a>{/if}
-      {#if record.table_of_contents_url}<a class="law-button" href={record.table_of_contents_url} target="_blank" rel="noopener">Official contents</a>{/if}
-      {#if record.effects_made_url}<a class="law-button" href={record.effects_made_url} target="_blank" rel="noopener">Changes made</a>{/if}
-      {#if record.effects_received_url}<a class="law-button" href={record.effects_received_url} target="_blank" rel="noopener">Changes received</a>{/if}
+      {#if rawDocumentUri}{#if documentUri}<a class="law-button" href={documentUri} target="_blank" rel="noopener noreferrer">Open official work</a>{:else}<span>{rawDocumentUri}</span>{/if}{/if}
+      {#if record.table_of_contents_url}{#if safeHref(record.table_of_contents_url)}<a class="law-button" href={safeHref(record.table_of_contents_url)} target="_blank" rel="noopener noreferrer">Official contents</a>{:else}<span>{record.table_of_contents_url}</span>{/if}{/if}
+      {#if record.effects_made_url}{#if safeHref(record.effects_made_url)}<a class="law-button" href={safeHref(record.effects_made_url)} target="_blank" rel="noopener noreferrer">Changes made</a>{:else}<span>{record.effects_made_url}</span>{/if}{/if}
+      {#if record.effects_received_url}{#if safeHref(record.effects_received_url)}<a class="law-button" href={safeHref(record.effects_received_url)} target="_blank" rel="noopener noreferrer">Changes received</a>{:else}<span>{record.effects_received_url}</span>{/if}{/if}
     </div>
 
     {#if manifestations.length}
@@ -70,19 +85,24 @@
         <summary>Official manifestations and data formats ({manifestations.length})</summary>
         <ul>
           {#each manifestations as [format, url]}
-            <li><a href={url} target="_blank" rel="noopener">{format.replaceAll('_', ' ')}</a></li>
+            <li>{#if safeHref(url)}<a href={safeHref(url)} target="_blank" rel="noopener noreferrer">{format.replaceAll('_', ' ')}</a>{:else}{format.replaceAll('_', ' ')}: {url}{/if}</li>
           {/each}
         </ul>
       </details>
     {/if}
 
     {#if !provisions.length}
-      <button class="load-button" type="button" disabled={loading || !structureUrl} onclick={() => void loadStructure()}>
-        {loading ? 'Loading official CLML…' : 'Load every Part, Chapter, section, article and nested provision'}
-      </button>
-      <p class="progressive-note">Loaded only on demand from legislation.gov.uk, so the catalogue remains fast while the authoritative subdivision tree stays complete.</p>
+      {#if structureFetchUrl}
+        <button class="load-button" type="button" disabled={loading} onclick={() => void loadStructure()}>
+          {loading ? 'Loading official CLML…' : 'Load every Part, Chapter, section, article and nested provision'}
+        </button>
+        <p class="progressive-note">Loaded only on demand from a same-origin published resource.</p>
+      {:else if structureUrl}
+        <button class="load-button" type="button" disabled title="Use the official link; this profile does not fetch external resources">External live text disabled</button>
+        <p class="progressive-note">The Warwickshire profile does not fetch external legislation data. <a href={structureUrl} target="_blank" rel="noopener noreferrer">Open the official CLML source ↗</a></p>
+      {/if}
     {/if}
-    {#if error}<p class="error" role="alert">{error} <a href={structureUrl} target="_blank" rel="noopener">Open the official CLML directly</a>.</p>{/if}
+    {#if error}<p class="error" role="alert">{error} {#if structureUrl}<a href={structureUrl} target="_blank" rel="noopener noreferrer">Open the official CLML directly</a>{:else if rawStructureUrl}{rawStructureUrl}{/if}.</p>{/if}
 
     {#if provisions.length}
       <div class="structure-tools">
@@ -99,7 +119,7 @@
             </div>
             {#if item.text}<p>{item.text}</p>{/if}
             <div class="provision-links">
-              <a href={item.officialUrl} target="_blank" rel="noopener">Selected passage</a>
+              {#if safeHref(item.officialUrl)}<a href={safeHref(item.officialUrl)} target="_blank" rel="noopener noreferrer">Selected passage</a>{:else}<span>{item.officialUrl}</span>{/if}
               <button type="button" onclick={() => void copyCitation(item)}>Copy provenance citation</button>
               <code>{item.sourceElement} · {item.id}</code>
               {#if item.extent}<span>Extent {item.extent}</span>{/if}

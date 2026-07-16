@@ -22,7 +22,7 @@ import {
   type OrdinalScores
 } from '$lib/search/staticSearch';
 import { SEARCH_MANIFEST_LIMITS, validateLargeSearchManifest } from '$lib/search/largeSearchContract';
-import { fetchJsonResource } from '$lib/sources/fetch';
+import { fetchJsonResource, resolveUrl } from '$lib/sources/fetch';
 import {
   type PreparedReleaseDataPlane,
   canonicalJson,
@@ -81,7 +81,7 @@ async function fetchJson<T>(reference: LargeResourceReference, requireReleaseEnt
   const hash = resourceHash(reference);
   const key = releaseDataPlane
     ? `${path}#${hash}#${requireReleaseEntry ? 'packed' : 'auto'}`
-    : `${new URL(path, baseUrl).toString()}#${hash}`;
+    : `${resolveUrl(path, baseUrl)}#${hash}`;
   if (!jsonCache.has(key)) {
     const request = fetchJsonResource<T>(reference, baseUrl, { releaseDataPlane, requireReleaseEntry });
     // Drop failed fetches from the cache so transient errors can be retried.

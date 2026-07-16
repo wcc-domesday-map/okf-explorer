@@ -984,6 +984,14 @@ input:focus {
   box-shadow: inset 4px 0 0 var(--selected-edge);
 }
 
+.node-provenance {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .reader-view .node-card span,
 .badge {
   display: inline-flex;
@@ -1584,6 +1592,37 @@ button.chip:focus {
 .detail a {
   color: #0645d8;
   overflow-wrap: anywhere;
+}
+
+.provenance-facts {
+  margin: 0;
+  padding-top: 0 !important;
+  border-top: 0 !important;
+  grid-template-columns: minmax(90px, 36%) minmax(0, 1fr) !important;
+}
+
+.provenance-notes {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.provenance-notes li + li {
+  margin-top: 5px;
+}
+
+.provenance-body {
+  box-sizing: border-box;
+  max-width: 100%;
+  max-height: 360px;
+  margin: 0;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
 }
 
 .standard-term {

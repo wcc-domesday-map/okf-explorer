@@ -17,6 +17,8 @@ import { normalizeSmallBundle } from './smallBundle';
 import { makeRangePackFixture, rangeResponse } from '../../test/rangePackFixture';
 import type { OkfBundle } from '$lib/types';
 
+const EXPLORER_URL = 'https://example.test/knowledge/';
+
 function mockLocalStorage() {
   const values = new Map<string, string>();
   return {
@@ -49,9 +51,16 @@ describe('fetch helpers', () => {
   it('resolves bundle-relative URLs and reports HTTP failures', async () => {
     expect(resolveUrl('data/manifest.json', 'https://example.test/repo/okf-explorer.json')).toBe('https://example.test/repo/data/manifest.json');
     expect(baseUrlFor('https://example.test/repo/okf-explorer.json')).toBe('https://example.test/repo/');
+    expect(() => resolveUrl('https://attacker.example/manifest.json', 'https://example.test/repo/okf-explorer.json')).toThrow('on this Explorer origin');
+    expect(() => resolveUrl('javascript:alert(1)', 'https://example.test/repo/okf-explorer.json')).toThrow('on this Explorer origin');
+    expect(() => resolveUrl('data:application/json,%7B%7D', 'https://example.test/repo/okf-explorer.json')).toThrow('on this Explorer origin');
 
     vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ ok: true })));
     await expect(fetchJson<{ ok: boolean }>('https://example.test/data.json')).resolves.toEqual({ ok: true });
+    expect(fetch).toHaveBeenCalledWith(
+      'https://example.test/data.json',
+      expect.objectContaining({ redirect: 'error' })
+    );
 
     vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ error: true }, { status: 404, statusText: 'Not Found' })));
     await expect(fetchJson('https://example.test/missing.json')).rejects.toThrow('404 Not Found');
@@ -60,10 +69,16 @@ describe('fetch helpers', () => {
   it('resolves machine-readable moved bundle descriptors', () => {
     expect(
       movedBundleTarget(
+        { kind: 'okf-moved', moved_to: './canonical/okf-explorer.json' },
+        'https://legacy.example/okf-explorer.json'
+      )
+    ).toBe('https://legacy.example/canonical/okf-explorer.json');
+    expect(() =>
+      movedBundleTarget(
         { kind: 'okf-moved', moved_to: 'https://canonical.example/okf-explorer.json' },
         'https://legacy.example/okf-explorer.json'
       )
-    ).toBe('https://canonical.example/okf-explorer.json');
+    ).toThrow('on this Explorer origin');
     expect(movedBundleTarget({ kind: 'okf-large-corpus' }, 'https://legacy.example/okf-explorer.json')).toBeNull();
     expect(() => movedBundleTarget({ kind: 'okf-moved' }, 'https://legacy.example/okf-explorer.json')).toThrow('missing moved_to');
     expect(() =>
@@ -152,7 +167,10 @@ describe('fetch helpers', () => {
     expect(response.responseUrl).toBe('https://example.test/api/record');
     expect(fetchMock).toHaveBeenCalledWith(
       'https://example.test/api/record',
-      expect.objectContaining({ headers: { Accept: 'application/json, application/*+json;q=0.9' } })
+      expect.objectContaining({
+        headers: { Accept: 'application/json, application/*+json;q=0.9' },
+        redirect: 'error'
+      })
     );
   });
 
@@ -246,6 +264,56 @@ describe('small bundle normalization', () => {
     expect(Object.keys(corpus.nodes)).toEqual(['a']);
   });
 
+  it('preserves Warwickshire FOI provenance and relationship evidence fields', () => {
+    const facts = [{ label: 'Service area', value: 'Education' }];
+    const notes = ['Provider-supplied content has not been independently verified.'];
+    const corpus = normalizeSmallBundle({
+      nodes: {
+        service: {
+          id: 'service',
+          title: 'School admissions',
+          resource: 'https://www.warwickshire.gov.uk/school-admissions',
+          source_url: 'https://www.warwickshire.gov.uk/',
+          source_id: 'SOURCE-WCC-WEB-2026-07-16',
+          source_record_id: 'wcc:/school-admissions',
+          retrieved_at: '2026-07-16T14:15:00Z',
+          published_at: '2026-07-01',
+          attribution: 'Warwickshire County Council',
+          rights_url: 'https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/',
+          reuse_basis: 'Open Government Licence v3.0',
+          confidence: 'high',
+          method: 'source-record-normalization',
+          facts,
+          notes,
+          body: '# School admissions\n\nReviewed public source.'
+        },
+        council: { id: 'council', title: 'Warwickshire County Council' }
+      },
+      relationships: [{
+        id: 'relationship-1',
+        source: 'service',
+        target: 'council',
+        kind: 'published by',
+        predicate: 'dcterms:publisher',
+        method: 'source-publisher-attribution',
+        confidence: 'high',
+        evidence: 'services/school-admissions.md'
+      }]
+    } as unknown as OkfBundle);
+
+    expect(corpus.nodes.service).toMatchObject({
+      source_id: 'SOURCE-WCC-WEB-2026-07-16',
+      source_record_id: 'wcc:/school-admissions',
+      facts,
+      notes
+    });
+    expect(corpus.relationships[0]).toMatchObject({
+      id: 'relationship-1',
+      predicate: 'dcterms:publisher',
+      evidence: 'services/school-admissions.md'
+    });
+  });
+
   it('normalizes an empty small bundle to safe defaults', () => {
     const corpus = normalizeSmallBundle({} as OkfBundle);
 
@@ -299,30 +367,40 @@ describe('registry and history', () => {
   });
 
   it('stores bundle history as newest unique entries', () => {
-    rememberHistory({ title: 'First', url: 'https://example.test/one.json' });
-    rememberHistory({ title: 'Second', url: 'https://example.test/two.json' });
-    rememberHistory({ title: 'First again', url: 'https://example.test/one.json' });
+    rememberHistory({ title: 'First', url: 'https://example.test/one.json' }, EXPLORER_URL);
+    rememberHistory({ title: 'Second', url: 'https://example.test/two.json' }, EXPLORER_URL);
+    rememberHistory({ title: 'First again', url: 'https://example.test/one.json' }, EXPLORER_URL);
 
-    expect(loadHistory()).toEqual([
+    expect(loadHistory(EXPLORER_URL)).toEqual([
       expect.objectContaining({ title: 'First again', url: 'https://example.test/one.json', kind: 'history' }),
       expect.objectContaining({ title: 'Second', url: 'https://example.test/two.json', kind: 'history' })
     ]);
   });
 
   it('ignores corrupted history storage', () => {
-    localStorage.setItem('okfExplorerBundleHistory:v2', '{not json');
-    expect(loadHistory()).toEqual([]);
+    localStorage.setItem('okfExplorerBundleHistory:v3', '{not json');
+    expect(loadHistory(EXPLORER_URL)).toEqual([]);
   });
 
   it('ignores non-array history storage and caps the stored list', () => {
-    localStorage.setItem('okfExplorerBundleHistory:v2', JSON.stringify({ url: 'https://example.test/not-array.json' }));
-    expect(loadHistory()).toEqual([]);
+    localStorage.setItem('okfExplorerBundleHistory:v3', JSON.stringify({ url: 'https://example.test/not-array.json' }));
+    expect(loadHistory(EXPLORER_URL)).toEqual([]);
 
     for (let index = 0; index < 25; index += 1) {
-      rememberHistory({ title: `Bundle ${index}`, url: `https://example.test/${index}.json` });
+      rememberHistory({ title: `Bundle ${index}`, url: `https://example.test/${index}.json` }, EXPLORER_URL);
     }
-    expect(loadHistory()).toHaveLength(20);
-    expect(loadHistory()[0].url).toBe('https://example.test/24.json');
+    expect(loadHistory(EXPLORER_URL)).toHaveLength(20);
+    expect(loadHistory(EXPLORER_URL)[0].url).toBe('https://example.test/24.json');
+  });
+
+  it('drops malicious and cross-origin URLs from browser history', () => {
+    rememberHistory({ title: 'Safe', url: '../okf/bundle.json' }, EXPLORER_URL);
+    rememberHistory({ title: 'Script', url: 'javascript:alert(1)' }, EXPLORER_URL);
+    rememberHistory({ title: 'Data', url: 'data:application/json,%7B%7D' }, EXPLORER_URL);
+    rememberHistory({ title: 'Cross origin', url: 'https://attacker.example/bundle.json' }, EXPLORER_URL);
+    expect(loadHistory(EXPLORER_URL)).toEqual([
+      expect.objectContaining({ title: 'Safe', url: 'https://example.test/okf/bundle.json' })
+    ]);
   });
 
   it('loads registry entries and degrades to an empty registry on failure', async () => {
@@ -331,14 +409,20 @@ describe('registry and history', () => {
       vi.fn(async () =>
         jsonResponse({
           bundles: [{ title: 'Bundle', url: 'https://example.test/bundle.json' }],
-          entries: [{ title: 'Large', url: 'https://example.test/large.json' }, { title: 'Broken' }]
+          entries: [
+            { title: 'Large', url: 'https://example.test/large.json' },
+            { title: 'Cross origin', url: 'https://attacker.example/large.json' },
+            { title: 'Script', url: 'javascript:alert(1)' },
+            { title: 'Data', url: 'data:application/json,%7B%7D' },
+            { title: 'Broken' }
+          ]
         })
       )
     );
-    await expect(loadRegistry('https://example.test/registry.json')).resolves.toHaveLength(2);
+    await expect(loadRegistry('https://example.test/registry.json', EXPLORER_URL)).resolves.toHaveLength(2);
 
     vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({}, { status: 500, statusText: 'Server Error' })));
-    await expect(loadRegistry('https://example.test/registry.json')).resolves.toEqual([]);
+    await expect(loadRegistry('https://example.test/registry.json', EXPLORER_URL)).resolves.toEqual([]);
   });
 
   it('ignores registry entries without URLs when bundles or entries are absent', async () => {
@@ -351,14 +435,21 @@ describe('registry and history', () => {
       )
     );
 
-    await expect(loadRegistry('https://example.test/registry.json')).resolves.toEqual([
+    await expect(loadRegistry('https://example.test/registry.json', EXPLORER_URL)).resolves.toEqual([
       { title: 'Valid', url: 'https://example.test/valid.json' }
     ]);
   });
 
   it('handles empty registry payloads', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({})));
-    await expect(loadRegistry('https://example.test/registry.json')).resolves.toEqual([]);
+    await expect(loadRegistry('https://example.test/registry.json', EXPLORER_URL)).resolves.toEqual([]);
+  });
+
+  it('does not fetch a cross-origin registry', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(loadRegistry('https://attacker.example/registry.json', EXPLORER_URL)).resolves.toEqual([]);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 
