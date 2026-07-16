@@ -4,6 +4,12 @@ All notable changes to the Warwickshire same-origin profile are recorded here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Made the Warwickshire registry's YAML-LD source authoritative and regenerated
+  all registry projections from it, eliminating CI drift from the same-origin
+  default bundle.
+
 ## [0.4.3-warwickshire.1] - 2026-07-16
 
 ### Added

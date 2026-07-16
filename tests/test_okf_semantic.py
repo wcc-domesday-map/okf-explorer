@@ -49,7 +49,15 @@ class OkfSemanticTest(unittest.TestCase):
         legacy = json.loads(rendered["legacy"])
         semantic = json.loads(rendered["semantic"])
         self.assertEqual("okf-explorer-registry.v1", legacy["schema"])
-        self.assertEqual(4, len(legacy["bundles"]))
+        self.assertEqual(1, len(legacy["bundles"]))
+        self.assertEqual(
+            "../okf/warwickshire-public/okf-bundle.json",
+            legacy["bundles"][0]["url"],
+        )
+        self.assertEqual(
+            "Warwickshire OKF Explorer Registry",
+            legacy["title"],
+        )
         self.assertEqual("registry/okf-registry.yamlld", legacy["semantic_source"])
         self.assertIn("@context", semantic)
 

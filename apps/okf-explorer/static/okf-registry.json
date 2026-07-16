@@ -6,12 +6,18 @@
       "id": "../okf/warwickshire-public/",
       "kind": "local-sample",
       "label": "Warwickshire Public Knowledge",
+      "license": "",
+      "profile": "https://chris-page-gov.github.io/okf-explorer/profile/bundle-wiki/v1/",
+      "publisher": "https://github.com/wcc-domesday-map",
       "semantic_url": "../okf/warwickshire-public/graph.yamlld",
       "status": "demo",
       "title": "Warwickshire Public Knowledge",
-      "url": "../okf/warwickshire-public/okf-bundle.json"
+      "url": "../okf/warwickshire-public/okf-bundle.json",
+      "version": "0.2.0-demo.2"
     }
   ],
+  "profile": "https://chris-page-gov.github.io/okf-explorer/profile/bundle-wiki/v1/",
   "schema": "okf-explorer-registry.v1",
+  "semantic_source": "registry/okf-registry.yamlld",
   "title": "Warwickshire OKF Explorer Registry"
 }
