@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { publicHttpHref } from '$lib/security/urlPolicy';
   import {
     formatBytes,
     isJsonContainer,
@@ -31,6 +32,10 @@
 
   const summary = $derived(sourceSummary(data, recordLabel));
   const rawText = $derived(data === null || data === undefined ? '' : JSON.stringify(data, null, 2));
+
+  function safeHref(value: unknown): string {
+    return publicHttpHref(value, location.href) || '';
+  }
 
   async function copyText(value: string, label: string) {
     if (!navigator.clipboard) return;
@@ -76,7 +81,7 @@
     </div>
     <div class="source-actions">
       <button type="button" onclick={onclose}>← Back to record</button>
-      <a class="button" href={url} target="_blank" rel="noopener noreferrer">Open raw JSON ↗</a>
+      {#if safeHref(url)}<a class="button" href={safeHref(url)} target="_blank" rel="noopener noreferrer">Open raw JSON ↗</a>{:else}<span>{url}</span>{/if}
     </div>
   </header>
 
@@ -89,7 +94,7 @@
       <h3>Explorer could not display this source response</h3>
       <p>{error}</p>
       <p>The endpoint may block browser requests, be unavailable, or exceed Explorer’s 10 MB display limit.</p>
-      <a class="button" href={url} target="_blank" rel="noopener noreferrer">Open raw JSON in a new tab ↗</a>
+      {#if safeHref(url)}<a class="button" href={safeHref(url)} target="_blank" rel="noopener noreferrer">Open raw JSON in a new tab ↗</a>{:else}<span>{url}</span>{/if}
     </div>
   {:else if data !== null && data !== undefined}
     <dl class="response-meta">

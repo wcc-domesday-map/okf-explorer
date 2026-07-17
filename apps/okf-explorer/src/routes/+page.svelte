@@ -49,6 +49,11 @@
   import { loadHistory, loadRegistry, rememberHistory } from '$lib/sources/registry';
   import { normalizeSmallBundle } from '$lib/sources/smallBundle';
   import {
+    publicHttpHrefForBundle,
+    requireSameOriginHttpUrl,
+    sameOriginResourceUrl
+  } from '$lib/security/urlPolicy';
+  import {
     analysisFacetForKey as findAnalysisFacetForKey,
     analysisFacetRows as getAnalysisFacetRows,
     analysisHierarchiesForFacet as findAnalysisHierarchiesForFacet,
@@ -63,7 +68,6 @@
     facetSummary as getFacetSummary,
     facetValueLabel,
     formatPercent,
-    isHttpUrl as isUrl,
     orderedFacetKeys,
     relatedSeriesDatasets,
     relationshipTitle as formatRelationshipTitle,
@@ -76,7 +80,7 @@
   } from '$lib/viewer/helpers';
   import './styles.css';
 
-  const DEFAULT_BUNDLE = 'https://chris-page-gov.github.io/okf-ai-infrastructure/okf-bundle.json';
+  const DEFAULT_BUNDLE = '../okf/warwickshire-public/okf-bundle.json';
   const DEFAULT_REGISTRY = './okf-registry.json';
   const VIEW_MODES: Array<{ id: ViewMode; label: string }> = [
     { id: 'reader', label: 'Reader' },
@@ -401,8 +405,8 @@
   });
 
   async function initialize() {
-    history = loadHistory();
-    registry = await loadRegistry(DEFAULT_REGISTRY);
+    history = loadHistory(location.href);
+    registry = await loadRegistry(DEFAULT_REGISTRY, location.href);
     pins = loadPins();
     bundleUrl = initialBundleUrl();
     const initialView = initialViewMode();
@@ -432,7 +436,26 @@
   }
 
   function toAbsoluteUrl(url: string): string {
-    return new URL(url, location.href).toString();
+    return requireSameOriginHttpUrl(url, location.href);
+  }
+
+  function currentBundleLinkBase(): string {
+    return source?.url || location.href;
+  }
+
+  function safeHref(value: unknown): string {
+    return publicHttpHrefForBundle(value, currentBundleLinkBase(), location.href) || '';
+  }
+
+  function safeFetchHref(value: unknown): string {
+    return sameOriginResourceUrl(value, currentBundleLinkBase(), location.href) || '';
+  }
+
+  function safeFetchTemplate(value: unknown): string {
+    if (typeof value !== 'string' || !value.trim()) return '';
+    const marker = '__OKF_QUERY__';
+    const resolved = safeFetchHref(value.replace('{query}', marker));
+    return resolved.replace(marker, '{query}');
   }
 
   function closeBundleSuggestionsOnPointerDown(event: PointerEvent) {
@@ -612,7 +635,7 @@
   async function loadSource(url: string) {
     const requestId = ++loadRequest;
     largeSearchRequest += 1;
-    const absoluteUrl = toAbsoluteUrl(url);
+    let absoluteUrl = '';
     loading = true;
     error = '';
     selectedId = '';
@@ -658,10 +681,7 @@
     largeSearchClient?.destroy();
     largeSearchClient = null;
     try {
-      const parsed = new URL(absoluteUrl);
-      if (parsed.origin !== location.origin && parsed.protocol !== 'https:') {
-        throw new Error('Only https:// bundle URLs (or same-origin paths) can be loaded.');
-      }
+      absoluteUrl = toAbsoluteUrl(url);
       const raw = await fetchJson<Record<string, unknown>>(absoluteUrl);
       if (requestId !== loadRequest) return;
       const movedTo = movedBundleTarget(raw, absoluteUrl);
@@ -685,7 +705,7 @@
           status: large.descriptor.status,
           publisher: large.descriptor.publisher,
           license: large.descriptor.license
-        });
+        }, location.href);
         bundleUrl = absoluteUrl;
         const params = new URLSearchParams(location.search);
         // The v2 manifest may advertise additional corpus-specific filter keys. Keep
@@ -719,7 +739,7 @@
         if (!visibleTypes.size) visibleTypes = new Set(availableTypes);
         smallQuery = retrieval.query;
         retrievalSort = retrieval.sort;
-        history = rememberHistory({ url: absoluteUrl, title: corpus.title, description: corpus.description, kind: 'bundle' });
+        history = rememberHistory({ url: absoluteUrl, title: corpus.title, description: corpus.description, kind: 'bundle' }, location.href);
         bundleUrl = absoluteUrl;
         const hash = safeDecodeHash();
         selectedId = hash && corpus.nodes[hash] ? hash : Object.keys(corpus.nodes)[0] || '';
@@ -1099,11 +1119,12 @@
   }
 
   async function loadLargeApiJson(route: string, url: unknown) {
-    if (!route || !isUrl(url)) return;
+    const resolvedUrl = safeFetchHref(url);
+    if (!route || !resolvedUrl) return;
     const requestId = largeApiRequest + 1;
     largeApiRequest = requestId;
     largeApiRoute = route;
-    largeApiUrl = url;
+    largeApiUrl = resolvedUrl;
     largeApiJson = null;
     largeApiError = '';
     largeApiBytes = 0;
@@ -1113,18 +1134,18 @@
     largeApiLoading = true;
     largeSourceInspectorOpen = true;
     try {
-      const response = await fetchSourceJson(url);
-      if (requestId !== largeApiRequest || largeApiRoute !== route || largeApiUrl !== url) return;
+      const response = await fetchSourceJson(resolvedUrl);
+      if (requestId !== largeApiRequest || largeApiRoute !== route || largeApiUrl !== resolvedUrl) return;
       largeApiJson = response.json;
       largeApiBytes = response.bytes;
       largeApiContentType = response.contentType;
       largeApiRetrievedAt = response.retrievedAt;
       largeApiResponseUrl = response.responseUrl;
     } catch (err) {
-      if (requestId !== largeApiRequest || largeApiRoute !== route || largeApiUrl !== url) return;
+      if (requestId !== largeApiRequest || largeApiRoute !== route || largeApiUrl !== resolvedUrl) return;
       largeApiError = err instanceof Error ? err.message : String(err);
     } finally {
-      if (requestId === largeApiRequest && largeApiRoute === route && largeApiUrl === url) largeApiLoading = false;
+      if (requestId === largeApiRequest && largeApiRoute === route && largeApiUrl === resolvedUrl) largeApiLoading = false;
     }
   }
 
@@ -1513,7 +1534,7 @@
         ? source.descriptor.extensions?.['okf-legislation-corpus.v1']
         : undefined;
       const remoteTemplate = typeof legislationExtension?.remote_full_text_search === 'string'
-        ? legislationExtension.remote_full_text_search
+        ? safeFetchTemplate(legislationExtension.remote_full_text_search)
         : '';
       const [localResponse, suggestions, officialResults] = await Promise.all([
         client.query({
@@ -2124,6 +2145,19 @@
 
   function metadataDisplayValue(value: unknown): string {
     return displayValue(value);
+  }
+
+  function smallFactRows(node: OkfNode): Array<{ label: string; value: string }> {
+    if (!Array.isArray(node.facts)) return [];
+    return node.facts.map((fact, index) => ({
+      label: typeof fact?.label === 'string' && fact.label.trim() ? fact.label.trim() : `Fact ${index + 1}`,
+      value: metadataDisplayValue(fact?.value)
+    }));
+  }
+
+  function smallNoteRows(node: OkfNode): string[] {
+    if (Array.isArray(node.notes)) return node.notes.map((note) => String(note)).filter(Boolean);
+    return typeof node.notes === 'string' && node.notes.trim() ? [node.notes.trim()] : [];
   }
 
   function groupDisplayValue(value: unknown): string {
@@ -4276,6 +4310,7 @@
               records={largeGeospatialRecords}
               filter={geospatialFilter}
               selectedRoute={largeInspectedRoute || largeSelectedRoute}
+              bundleUrl={source.url}
               loading={largeFullLoading}
               onselect={selectLargeRoute}
               onfilter={setGeospatialFilter}
@@ -4361,6 +4396,7 @@
                 <span>{node.type || 'Node'}</span>
                 <h2>{node.title}</h2>
                 <p>{node.description || node.summary || node.source || node.id}</p>
+                <small class="node-provenance">Source: {metadataDisplayValue(node.source_id || node.source_url)} · Retrieved: {metadataDisplayValue(node.retrieved_at)}</small>
               </button>
             {/each}
           </section>
@@ -4475,6 +4511,19 @@
               </button>
             {/each}
           </section>
+        {:else if activeView === 'type'}
+          <section class="type-view">
+            {#each typeList as type}
+              <article>
+                <h2>{type}</h2>
+                {#each visibleNodes.filter((node) => (node.type || 'Node') === type) as node}
+                  <button type="button" onclick={() => inspectNode(node.id)} ondblclick={() => selectNode(node.id)}>
+                    {node.title}
+                  </button>
+                {/each}
+              </article>
+            {/each}
+          </section>
         {:else if activeView === 'timeline'}
           <section class="timeline-view">
             {#each visibleNodes.filter((node) => node.timestamp).sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp))).slice(0, 120) as node}
@@ -4502,6 +4551,7 @@
             records={smallGeospatialRecords}
             filter={geospatialFilter}
             selectedRoute={inspectedId || selectedId}
+            bundleUrl={source?.url || location.href}
             onselect={selectNode}
             onfilter={setGeospatialFilter}
           />
@@ -4632,11 +4682,15 @@
                 <button type="button" onclick={() => void selectView('graph')}>Graph</button>
                 <button type="button" onclick={() => pinRoute(largeDetail?.route)}>Pin</button>
                 <button type="button" onclick={() => copyRoute(largeDetail.route)}>Copy route</button>
-                {#if isUrl(largeDetail.dataset.source_api_url)}
-                  <button class="primary-action" type="button" onclick={() => void loadLargeApiJson(largeDetail.route, largeDetail.dataset.source_api_url)}>
-                    {largeApiRoute === largeDetail.route && largeApiLoading ? 'Loading source data…' : 'View source data'}
-                  </button>
-                  <a class="button" href={largeDetail.dataset.source_api_url} target="_blank" rel="noopener noreferrer">Open raw JSON ↗</a>
+                {#if safeHref(largeDetail.dataset.source_api_url)}
+                  {#if safeFetchHref(largeDetail.dataset.source_api_url)}
+                    <button class="primary-action" type="button" onclick={() => void loadLargeApiJson(largeDetail.route, largeDetail.dataset.source_api_url)}>
+                      {largeApiRoute === largeDetail.route && largeApiLoading ? 'Loading source data…' : 'View source data'}
+                    </button>
+                  {:else}
+                    <button type="button" disabled title="Use the raw JSON link; this profile does not fetch external resources">External source preview disabled</button>
+                  {/if}
+                  <a class="button" href={safeHref(largeDetail.dataset.source_api_url)} target="_blank" rel="noopener noreferrer">Open raw JSON ↗</a>
                 {/if}
                 {#if largeInspectedRoute}<button type="button" onclick={clearInspection}>{largeSelectedRoute ? 'Back to selected card' : 'Clear inspection'}</button>{/if}
               </div>
@@ -4646,20 +4700,20 @@
                   {#if operationalContext.explicit}
                     <p><strong>Evidence-backed operational metadata supplied by this bundle.</strong>{#if operationalContext.verifiedAt} Verified {sourceDateLabel(operationalContext.verifiedAt)}.{/if}</p>
                     <dl>
-                      {#if operationalContext.authoritativeSource}<dt>Authoritative source</dt><dd>{#if isUrl(operationalContext.authoritativeSource.url)}<a href={operationalContext.authoritativeSource.url} target="_blank" rel="noopener noreferrer">{operationalContext.authoritativeSource.name} ↗</a>{:else}{operationalContext.authoritativeSource.name}{/if}</dd>{/if}
-                      {#if operationalContext.canonicalSource}<dt>Canonical dataset page</dt><dd>{#if isUrl(operationalContext.canonicalSource.url)}<a href={operationalContext.canonicalSource.url} target="_blank" rel="noopener noreferrer">{operationalContext.canonicalSource.label} ↗</a>{:else}{operationalContext.canonicalSource.label}{/if}</dd>{/if}
+                      {#if operationalContext.authoritativeSource}<dt>Authoritative source</dt><dd>{#if safeHref(operationalContext.authoritativeSource.url)}<a href={safeHref(operationalContext.authoritativeSource.url)} target="_blank" rel="noopener noreferrer">{operationalContext.authoritativeSource.name} ↗</a>{:else}{operationalContext.authoritativeSource.name}{/if}</dd>{/if}
+                      {#if operationalContext.canonicalSource}<dt>Canonical dataset page</dt><dd>{#if safeHref(operationalContext.canonicalSource.url)}<a href={safeHref(operationalContext.canonicalSource.url)} target="_blank" rel="noopener noreferrer">{operationalContext.canonicalSource.label} ↗</a>{:else}{operationalContext.canonicalSource.label}{/if}</dd>{/if}
                       {#if operationalContext.updateFrequency}<dt>Update frequency</dt><dd>{operationalContext.updateFrequency}</dd>{/if}
                       {#if operationalContext.latestRelease}<dt>Latest release</dt><dd>{operationalContext.latestRelease}</dd>{/if}
                       {#if operationalContext.maintenanceStatus}<dt>Maintenance status</dt><dd>{operationalContext.maintenanceStatus}</dd>{/if}
-                      {#if operationalContext.api}<dt>API</dt><dd>{#if isUrl(operationalContext.api.url)}<a href={operationalContext.api.url} target="_blank" rel="noopener noreferrer">{operationalContext.api.label} ↗</a>{:else}{operationalContext.api.label}{/if}</dd>{/if}
-                      {#if operationalContext.technicalSpecificationUrl}<dt>Technical specification</dt><dd>{#if isUrl(operationalContext.technicalSpecificationUrl)}<a href={operationalContext.technicalSpecificationUrl} target="_blank" rel="noopener noreferrer">Open specification ↗</a>{:else}{operationalContext.technicalSpecificationUrl}{/if}</dd>{/if}
-                      {#if operationalContext.licenceUrl}<dt>Licence</dt><dd>{#if isUrl(operationalContext.licenceUrl)}<a href={operationalContext.licenceUrl} target="_blank" rel="noopener noreferrer">Open licence ↗</a>{:else}{operationalContext.licenceUrl}{/if}</dd>{/if}
+                      {#if operationalContext.api}<dt>API</dt><dd>{#if safeHref(operationalContext.api.url)}<a href={safeHref(operationalContext.api.url)} target="_blank" rel="noopener noreferrer">{operationalContext.api.label} ↗</a>{:else}{operationalContext.api.label}{/if}</dd>{/if}
+                      {#if operationalContext.technicalSpecificationUrl}<dt>Technical specification</dt><dd>{#if safeHref(operationalContext.technicalSpecificationUrl)}<a href={safeHref(operationalContext.technicalSpecificationUrl)} target="_blank" rel="noopener noreferrer">Open specification ↗</a>{:else}{operationalContext.technicalSpecificationUrl}{/if}</dd>{/if}
+                      {#if operationalContext.licenceUrl}<dt>Licence</dt><dd>{#if safeHref(operationalContext.licenceUrl)}<a href={safeHref(operationalContext.licenceUrl)} target="_blank" rel="noopener noreferrer">Open licence ↗</a>{:else}{operationalContext.licenceUrl}{/if}</dd>{/if}
                     </dl>
                     {#if operationalContext.distributions.length}
                       <h4>Declared distributions</h4>
                       <ul>
                         {#each operationalContext.distributions as distribution}
-                          <li>{#if isUrl(distribution.url)}<a href={distribution.url} target="_blank" rel="noopener noreferrer">{distribution.label} ↗</a>{:else}{distribution.label}{/if}{#if distribution.kind} <span class="muted">({distribution.kind})</span>{/if}</li>
+                          <li>{#if safeHref(distribution.url)}<a href={safeHref(distribution.url)} target="_blank" rel="noopener noreferrer">{distribution.label} ↗</a>{:else}{distribution.label}{/if}{#if distribution.kind} <span class="muted">({distribution.kind})</span>{/if}</li>
                         {/each}
                       </ul>
                     {/if}
@@ -4680,7 +4734,7 @@
                     <h4>Publisher or distribution links supplied by the catalogue</h4>
                     <ul>
                       {#each operationalContext.linkedSources.slice(0, 8) as linkedSource}
-                        <li><a href={linkedSource.url} target="_blank" rel="noopener noreferrer">{linkedSource.label} ↗</a> <span class="muted">{linkedSource.host}</span></li>
+                        <li>{#if safeHref(linkedSource.url)}<a href={safeHref(linkedSource.url)} target="_blank" rel="noopener noreferrer">{linkedSource.label} ↗</a>{:else}{linkedSource.label}{/if} <span class="muted">{linkedSource.host}</span></li>
                       {/each}
                     </ul>
                     <p class="muted">A linked host may contain newer operational information. Explorer does not call it authoritative until the bundle supplies canonical-source evidence and provenance.</p>
@@ -4749,12 +4803,12 @@
                 <dt><span class="label-help">OpenAPI term<button class="info-icon" type="button" aria-label="Explain OpenAPI term" onclick={() => toggleHelp('openapi-type')} onmouseenter={() => showHelp('openapi-type')} onmouseleave={() => hideHelp('openapi-type')} onfocus={() => showHelp('openapi-type')} onblur={() => hideHelp('openapi-type')}>i</button>{#if activeHelpKey === 'openapi-type'}<span class="info-bubble" role="tooltip">{helpText('openapi-type')}</span>{/if}</span></dt><dd><code class="standard-term">{metadataDisplayValue(largeDetail.dataset.openapi_type)}</code></dd>
                 <dt>Lifecycle</dt><dd>{displayValue(largeDetail.dataset.lifecycle_status || largeDetail.dataset.state)}</dd>
                 <dt>Area served</dt><dd>{displayValue(largeDetail.dataset.area_served || largeDetail.dataset.areaServed)}</dd>
-                <dt>{primaryUrlLabel()}</dt><dd>{#if isUrl(largeDetail.dataset.url)}<a href={largeDetail.dataset.url} target="_blank" rel="noopener">{largeDetail.dataset.url}</a>{:else}{displayValue(largeDetail.dataset.url)}{/if}</dd>
-                <dt>Documentation</dt><dd>{#if isUrl(largeDetail.dataset.documentation)}<a href={largeDetail.dataset.documentation} target="_blank" rel="noopener">{largeDetail.dataset.documentation}</a>{:else}{displayValue(largeDetail.dataset.documentation)}{/if}</dd>
-                {#if largeDetail.dataset.source_api_url}<dt>Source API</dt><dd>{#if isUrl(largeDetail.dataset.source_api_url)}<button type="button" onclick={() => void loadLargeApiJson(largeDetail.route, largeDetail.dataset.source_api_url)}>View source data</button> <a href={largeDetail.dataset.source_api_url} target="_blank" rel="noopener noreferrer">Open raw JSON ↗</a>{:else}{displayValue(largeDetail.dataset.source_api_url)}{/if}</dd>{/if}
+                <dt>{primaryUrlLabel()}</dt><dd>{#if safeHref(largeDetail.dataset.url)}<a href={safeHref(largeDetail.dataset.url)} target="_blank" rel="noopener noreferrer">{largeDetail.dataset.url}</a>{:else}{displayValue(largeDetail.dataset.url)}{/if}</dd>
+                <dt>Documentation</dt><dd>{#if safeHref(largeDetail.dataset.documentation)}<a href={safeHref(largeDetail.dataset.documentation)} target="_blank" rel="noopener noreferrer">{largeDetail.dataset.documentation}</a>{:else}{displayValue(largeDetail.dataset.documentation)}{/if}</dd>
+                {#if largeDetail.dataset.source_api_url}<dt>Source API</dt><dd>{#if safeHref(largeDetail.dataset.source_api_url)}{#if safeFetchHref(largeDetail.dataset.source_api_url)}<button type="button" onclick={() => void loadLargeApiJson(largeDetail.route, largeDetail.dataset.source_api_url)}>View source data</button>{:else}<button type="button" disabled>External source preview disabled</button>{/if} <a href={safeHref(largeDetail.dataset.source_api_url)} target="_blank" rel="noopener noreferrer">Open raw JSON ↗</a>{:else}{displayValue(largeDetail.dataset.source_api_url)}{/if}</dd>{/if}
                 </dl>
               </details>
-              <LegislationDetail record={largeDetail.dataset} />
+              <LegislationDetail record={largeDetail.dataset} bundleUrl={source.url} />
               {#if acronymExpansions(largeDetail.dataset).length || contextLinks(largeDetail.dataset).length}
                 <details class="metadata-section disclosure-section">
                   <summary>Context</summary>
@@ -4762,15 +4816,15 @@
                     {#each acronymExpansions(largeDetail.dataset) as expansion}
                       <dt>{expansion.acronym}</dt>
                       <dd>
-                        {#if isUrl(expansion.source_url)}
-                          <a href={expansion.source_url} target="_blank" rel="noopener">{expansion.expanded}</a>
+                        {#if safeHref(expansion.source_url)}
+                          <a href={safeHref(expansion.source_url)} target="_blank" rel="noopener noreferrer">{expansion.expanded}</a>
                         {:else}
                           {expansion.expanded}
                         {/if}
                       </dd>
                     {/each}
                     {#each contextLinks(largeDetail.dataset) as link}
-                      <dt>{link.label}</dt><dd>{#if isUrl(link.url)}<a href={link.url} target="_blank" rel="noopener">{link.description || link.url}</a>{:else}{displayValue(link.description || link.url)}{/if}</dd>
+                      <dt>{link.label}</dt><dd>{#if safeHref(link.url)}<a href={safeHref(link.url)} target="_blank" rel="noopener noreferrer">{link.description || link.url}</a>{:else}{displayValue(link.description || link.url)}{/if}</dd>
                     {/each}
                   </dl>
                 </details>
@@ -4897,7 +4951,7 @@
                 <dt>Concept ID</dt><dd>{displayValue(largeDetail.resource.concept_id)}</dd>
                 <dt>Host</dt><dd>{largeDetail.resource.host || 'unknown'}</dd>
                 <dt>Type</dt><dd>{largeDetail.resource.resource_type || 'unknown'}</dd>
-                <dt>URL</dt><dd>{#if isUrl(largeDetail.resource.url)}<a href={largeDetail.resource.url} target="_blank" rel="noopener">{largeDetail.resource.url}</a>{:else}{displayValue(largeDetail.resource.url)}{/if}</dd>
+                <dt>URL</dt><dd>{#if safeHref(largeDetail.resource.url)}<a href={safeHref(largeDetail.resource.url)} target="_blank" rel="noopener noreferrer">{largeDetail.resource.url}</a>{:else}{displayValue(largeDetail.resource.url)}{/if}</dd>
                 <dt>GOV.UK path</dt><dd>{displayValue(largeDetail.resource.govuk_content_path)}</dd>
                 </dl>
               </details>
@@ -4912,7 +4966,7 @@
                   <dt>Metadata modified</dt><dd>{displayValue(largeDetail.resource.metadata_modified)}</dd>
                   <dt>Size</dt><dd>{displayValue(largeDetail.resource.size)}</dd>
                   <dt>Hash</dt><dd>{displayValue(largeDetail.resource.hash)}</dd>
-                  <dt>Schema URL</dt><dd>{#if isUrl(largeDetail.resource.schema_url)}<a href={largeDetail.resource.schema_url} target="_blank" rel="noopener">{largeDetail.resource.schema_url}</a>{:else}{displayValue(largeDetail.resource.schema_url)}{/if}</dd>
+                  <dt>Schema URL</dt><dd>{#if safeHref(largeDetail.resource.schema_url)}<a href={safeHref(largeDetail.resource.schema_url)} target="_blank" rel="noopener noreferrer">{largeDetail.resource.schema_url}</a>{:else}{displayValue(largeDetail.resource.schema_url)}{/if}</dd>
                   <dt>Schema type</dt><dd>{displayValue(largeDetail.resource.schema_type)}</dd>
                 </dl>
               </details>
@@ -5010,14 +5064,14 @@
                 <dt><span class="label-help">Contract status<button class="info-icon" type="button" aria-label="Explain contract status" onclick={() => toggleHelp('contract-status')} onmouseenter={() => showHelp('contract-status')} onmouseleave={() => hideHelp('contract-status')} onfocus={() => showHelp('contract-status')} onblur={() => hideHelp('contract-status')}>i</button>{#if activeHelpKey === 'contract-status'}<span class="info-bubble" role="tooltip">{helpText('contract-status')}</span>{/if}</span></dt><dd>{displayValue(largeDetail.result.contract_status)}</dd>
                 <dt><span class="label-help">DCAT term<button class="info-icon" type="button" aria-label="Explain DCAT term" onclick={() => toggleHelp('dcat-type')} onmouseenter={() => showHelp('dcat-type')} onmouseleave={() => hideHelp('dcat-type')} onfocus={() => showHelp('dcat-type')} onblur={() => hideHelp('dcat-type')}>i</button>{#if activeHelpKey === 'dcat-type'}<span class="info-bubble" role="tooltip">{helpText('dcat-type')}</span>{/if}</span></dt><dd><code class="standard-term">{metadataDisplayValue(largeDetail.result.dcat_type)}</code></dd>
                 <dt><span class="label-help">OpenAPI term<button class="info-icon" type="button" aria-label="Explain OpenAPI term" onclick={() => toggleHelp('openapi-type')} onmouseenter={() => showHelp('openapi-type')} onmouseleave={() => hideHelp('openapi-type')} onfocus={() => showHelp('openapi-type')} onblur={() => hideHelp('openapi-type')}>i</button>{#if activeHelpKey === 'openapi-type'}<span class="info-bubble" role="tooltip">{helpText('openapi-type')}</span>{/if}</span></dt><dd><code class="standard-term">{metadataDisplayValue(largeDetail.result.openapi_type)}</code></dd>
-                <dt>{primaryUrlLabel()}</dt><dd>{#if isUrl(largeDetail.result.url)}<a href={largeDetail.result.url} target="_blank" rel="noopener">{largeDetail.result.url}</a>{:else}{displayValue(largeDetail.result.url)}{/if}</dd>
-                <dt>Documentation</dt><dd>{#if isUrl(largeDetail.result.documentation)}<a href={largeDetail.result.documentation} target="_blank" rel="noopener">{largeDetail.result.documentation}</a>{:else}{displayValue(largeDetail.result.documentation)}{/if}</dd>
+                <dt>{primaryUrlLabel()}</dt><dd>{#if safeHref(largeDetail.result.url)}<a href={safeHref(largeDetail.result.url)} target="_blank" rel="noopener noreferrer">{largeDetail.result.url}</a>{:else}{displayValue(largeDetail.result.url)}{/if}</dd>
+                <dt>Documentation</dt><dd>{#if safeHref(largeDetail.result.documentation)}<a href={safeHref(largeDetail.result.documentation)} target="_blank" rel="noopener noreferrer">{largeDetail.result.documentation}</a>{:else}{displayValue(largeDetail.result.documentation)}{/if}</dd>
                 <dt><span class="label-help">Metadata quality<button class="info-icon" type="button" aria-label="Explain metadata quality" onclick={() => toggleHelp('metadata-quality')} onmouseenter={() => showHelp('metadata-quality')} onmouseleave={() => hideHelp('metadata-quality')} onfocus={() => showHelp('metadata-quality')} onblur={() => hideHelp('metadata-quality')}>i</button>{#if activeHelpKey === 'metadata-quality'}<span class="info-bubble" role="tooltip">{helpText('metadata-quality')}</span>{/if}</span></dt><dd>{formatPercent(largeDetail.result.quality_score)}</dd>
                 <dt>Route</dt><dd>{largeDetail.result.open}</dd>
                 <dt><span class="label-help">Timestamp<button class="info-icon" type="button" aria-label="Explain timestamp" onclick={() => toggleHelp('source-date:search-result')} onmouseenter={() => showHelp('source-date:search-result')} onmouseleave={() => hideHelp('source-date:search-result')} onfocus={() => showHelp('source-date:search-result')} onblur={() => hideHelp('source-date:search-result')}>i</button>{#if activeHelpKey === 'source-date:search-result'}<span class="info-bubble" role="tooltip">{helpText('source-date:search-result')}</span>{/if}</span></dt><dd>{metadataDisplayValue(largeDetail.result.timestamp)}</dd>
                 </dl>
               </details>
-              <LegislationDetail record={largeDetail.result} />
+              <LegislationDetail record={largeDetail.result} bundleUrl={source.url} />
               <div class="chips">
                 {#each (largeDetail.result.topics || []).slice(0, 10) as topic}<button class="chip topic-chip" type="button" title={`Filter by topic: ${topic}`} onclick={() => applyAnalysisFacet('topic', topic)}>{topic}</button>{/each}
                 {#each (largeDetail.result.formats || []).slice(0, 16) as format}<button class="chip" type="button" title={`Filter by format: ${format}`} onclick={() => applyAnalysisFacet('format', format)}>{format}</button>{/each}
@@ -5097,10 +5151,10 @@
               <dt>Schema</dt><dd>{source.descriptor.schema}</dd>
               {#if source.descriptor.version}<dt>Version</dt><dd>{source.descriptor.version}</dd>{/if}
               {#if source.descriptor.status}<dt>Status</dt><dd>{source.descriptor.status}</dd>{/if}
-              {#if source.descriptor.profile}<dt>Profile</dt><dd><a href={source.descriptor.profile} target="_blank" rel="noreferrer">{source.descriptor.profile}</a></dd>{/if}
-              {#if source.descriptor.semantic_descriptor}<dt>YAML-LD</dt><dd><a href={source.descriptor.semantic_descriptor} target="_blank" rel="noreferrer">semantic descriptor</a></dd>{/if}
-              {#if source.descriptor.publisher}<dt>Publisher</dt><dd><a href={source.descriptor.publisher} target="_blank" rel="noreferrer">{source.descriptor.publisher}</a></dd>{/if}
-              {#if source.descriptor.license}<dt>Licence</dt><dd><a href={source.descriptor.license} target="_blank" rel="noreferrer">source licence</a></dd>{/if}
+              {#if source.descriptor.profile}<dt>Profile</dt><dd>{#if safeHref(source.descriptor.profile)}<a href={safeHref(source.descriptor.profile)} target="_blank" rel="noopener noreferrer">{source.descriptor.profile}</a>{:else}{source.descriptor.profile}{/if}</dd>{/if}
+              {#if source.descriptor.semantic_descriptor}<dt>YAML-LD</dt><dd>{#if safeHref(source.descriptor.semantic_descriptor)}<a href={safeHref(source.descriptor.semantic_descriptor)} target="_blank" rel="noopener noreferrer">semantic descriptor</a>{:else}{source.descriptor.semantic_descriptor}{/if}</dd>{/if}
+              {#if source.descriptor.publisher}<dt>Publisher</dt><dd>{#if safeHref(source.descriptor.publisher)}<a href={safeHref(source.descriptor.publisher)} target="_blank" rel="noopener noreferrer">{source.descriptor.publisher}</a>{:else}{source.descriptor.publisher}{/if}</dd>{/if}
+              {#if source.descriptor.license}<dt>Licence</dt><dd>{#if safeHref(source.descriptor.license)}<a href={safeHref(source.descriptor.license)} target="_blank" rel="noopener noreferrer">source licence</a>{:else}{source.descriptor.license}{/if}</dd>{/if}
               <dt>Generated</dt><dd>{source.descriptor.generated_at || source.manifest.generated_at}</dd>
               <dt>Search index</dt>
               <dd title="Unique normalized terms available to local browser search; no AI or paid token usage">
@@ -5125,6 +5179,11 @@
             <dt>Target</dt><dd><button type="button" onclick={() => inspectNode(smallInspectedRelationship?.target || '')}>{smallCorpus.nodes[smallInspectedRelationship.target]?.title || smallInspectedRelationship.target}</button></dd>
             <dt>Source route</dt><dd>{smallInspectedRelationship.source}</dd>
             <dt>Target route</dt><dd>{smallInspectedRelationship.target}</dd>
+            <dt>Relationship ID</dt><dd>{metadataDisplayValue(smallInspectedRelationship.id)}</dd>
+            <dt>Predicate</dt><dd>{metadataDisplayValue(smallInspectedRelationship.predicate)}</dd>
+            <dt>Method</dt><dd>{metadataDisplayValue(smallInspectedRelationship.method)}</dd>
+            <dt>Confidence</dt><dd>{metadataDisplayValue(smallInspectedRelationship.confidence)}</dd>
+            <dt>Evidence</dt><dd>{#if safeHref(smallInspectedRelationship.evidence)}<a href={safeHref(smallInspectedRelationship.evidence)} target="_blank" rel="noopener noreferrer">{smallInspectedRelationship.evidence} ↗</a>{:else}{metadataDisplayValue(smallInspectedRelationship.evidence)}{/if}</dd>
           </dl>
           <details class="json-panel">
             <summary>Relationship JSON</summary>
@@ -5137,9 +5196,44 @@
           <dl>
             <dt>Route</dt><dd>{detailNode.id}</dd>
             <dt>Section</dt><dd>{detailNode.section || 'root'}</dd>
-            <dt>Source</dt><dd>{metadataDisplayValue(detailNode.source)}</dd>
+            <dt>Source</dt><dd>{#if safeHref(detailNode.source)}<a href={safeHref(detailNode.source)} target="_blank" rel="noopener noreferrer">{detailNode.source} ↗</a>{:else}{metadataDisplayValue(detailNode.source)}{/if}</dd>
             <dt>Links</dt><dd>{detailRelationships.length}</dd>
           </dl>
+          <details class="metadata-section disclosure-section provenance-section" open>
+            <summary>Evidence, provenance and reuse</summary>
+            <dl>
+              <dt>Resource</dt><dd>{#if safeHref(detailNode.resource)}<a href={safeHref(detailNode.resource)} target="_blank" rel="noopener noreferrer">{detailNode.resource} ↗</a>{:else}{metadataDisplayValue(detailNode.resource)}{/if}</dd>
+              <dt>Source URL</dt><dd>{#if safeHref(detailNode.source_url)}<a href={safeHref(detailNode.source_url)} target="_blank" rel="noopener noreferrer">{detailNode.source_url} ↗</a>{:else}{metadataDisplayValue(detailNode.source_url)}{/if}</dd>
+              <dt>Source ID</dt><dd>{metadataDisplayValue(detailNode.source_id)}</dd>
+              <dt>Source record ID</dt><dd>{metadataDisplayValue(detailNode.source_record_id)}</dd>
+              <dt>Retrieved at</dt><dd>{metadataDisplayValue(detailNode.retrieved_at)}</dd>
+              <dt>Published at</dt><dd>{metadataDisplayValue(detailNode.published_at)}</dd>
+              <dt>Attribution</dt><dd>{metadataDisplayValue(detailNode.attribution)}</dd>
+              <dt>Rights URL</dt><dd>{#if safeHref(detailNode.rights_url)}<a href={safeHref(detailNode.rights_url)} target="_blank" rel="noopener noreferrer">{detailNode.rights_url} ↗</a>{:else}{metadataDisplayValue(detailNode.rights_url)}{/if}</dd>
+              <dt>Reuse basis</dt><dd>{metadataDisplayValue(detailNode.reuse_basis)}</dd>
+              <dt>Confidence</dt><dd>{metadataDisplayValue(detailNode.confidence)}</dd>
+              <dt>Method</dt><dd>{metadataDisplayValue(detailNode.method)}</dd>
+              <dt>Facts</dt>
+              <dd>
+                {#if smallFactRows(detailNode).length}
+                  <dl class="provenance-facts">
+                    {#each smallFactRows(detailNode) as fact}<dt>{fact.label}</dt><dd>{fact.value}</dd>{/each}
+                  </dl>
+                {:else}
+                  Not specified (metadata gap)
+                {/if}
+              </dd>
+              <dt>Notes</dt>
+              <dd>
+                {#if smallNoteRows(detailNode).length}
+                  <ul class="provenance-notes">{#each smallNoteRows(detailNode) as note}<li>{note}</li>{/each}</ul>
+                {:else}
+                  Not specified (metadata gap)
+                {/if}
+              </dd>
+              <dt>Body</dt><dd><pre class="provenance-body">{metadataDisplayValue(detailNode.body)}</pre></dd>
+            </dl>
+          </details>
           <h3>Relationships</h3>
           {#each detailRelationships.slice(0, 20) as relationship}
             <button type="button" onclick={() => inspectNode(relationship.source === detailNode?.id ? relationship.target : relationship.source)}>

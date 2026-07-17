@@ -1,7 +1,8 @@
 import { expect, test, type BrowserContext, type Page, type Route } from '@playwright/test';
 
-const FIXTURE_ORIGIN = 'https://geo.fixture.test';
-const LARGE_ORIGIN = 'https://large-geo.fixture.test';
+const APP_ORIGIN = 'http://127.0.0.1:4173';
+const FIXTURE_ORIGIN = `${APP_ORIGIN}/fixtures/small`;
+const LARGE_ORIGIN = `${APP_ORIGIN}/fixtures/large`;
 
 type JsonRecord = Record<string, unknown>;
 
@@ -174,24 +175,25 @@ async function installSmallFixture(
 ) {
   await context.route(`${FIXTURE_ORIGIN}/**`, async (route) => {
     const url = new URL(route.request().url());
+    const pathname = url.pathname.replace(/^\/fixtures\/small/, '');
     requestLog.push(url.toString());
-    if (url.pathname === '/bundle.json') return json(route, bundle);
-    if (url.pathname === '/data/parks.geojson') {
+    if (pathname === '/bundle.json') return json(route, bundle);
+    if (pathname === '/data/parks.geojson') {
       if (previewDelayMs) await new Promise((resolve) => setTimeout(resolve, previewDelayMs));
       return json(route, featureCollection());
     }
-    if (url.pathname === '/data/dense.geojson') {
+    if (pathname === '/data/dense.geojson') {
       const coordinates = Array.from({ length: 12_050 }, (_, index) => [-1 + index / 100_000, 52 + index / 200_000]);
       return json(route, {
         type: 'FeatureCollection',
         features: [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates } }]
       });
     }
-    if (url.pathname === '/ogc/collections/places/items') return json(route, featureCollection());
-    if (url.pathname === '/arcgis/rest/services/Planning/FeatureServer') {
+    if (pathname === '/ogc/collections/places/items') return json(route, featureCollection());
+    if (pathname === '/arcgis/rest/services/Planning/FeatureServer') {
       return json(route, { layers: [{ id: 2, name: 'Planning boundaries' }] });
     }
-    if (url.pathname === '/arcgis/rest/services/Planning/FeatureServer/2/query') {
+    if (pathname === '/arcgis/rest/services/Planning/FeatureServer/2/query') {
       const features = Array.from({ length: 105 }, (_, index) => ({
         type: 'Feature',
         properties: { id: index },
@@ -199,8 +201,8 @@ async function installSmallFixture(
       }));
       return json(route, { type: 'FeatureCollection', features });
     }
-    if (url.pathname === '/data/unavailable.geojson') return json(route, { error: 'temporarily unavailable' }, 503);
-    if (url.pathname === '/wms') return json(route, { linked: true });
+    if (pathname === '/data/unavailable.geojson') return json(route, { error: 'temporarily unavailable' }, 503);
+    if (pathname === '/wms') return json(route, { linked: true });
     return json(route, { error: 'not found' }, 404);
   });
 }
@@ -444,14 +446,15 @@ test.describe('geospatial Map state, accessibility and bounds', () => {
   test('GEO-E2E-15 exposes the large-corpus index-loading state and then renders Map', async ({ page }) => {
     await page.context().route(`${LARGE_ORIGIN}/**`, async (route) => {
       const url = new URL(route.request().url());
-      if (url.pathname === '/okf-explorer.json') return json(route, {
+      const pathname = url.pathname.replace(/^\/fixtures\/large/, '');
+      if (pathname === '/okf-explorer.json') return json(route, {
         schema: 'okf-explorer-large-corpus.v1',
         kind: 'okf-large-corpus',
         title: 'Large geospatial fixture',
         entrypoints: { data_manifest: 'data/manifest.json', overview_index: 'data/overview.json' },
         counts: { datasets: 1, resources: 1, publishers: 1, relationships: 0 }
       });
-      if (url.pathname === '/data/manifest.json') return json(route, {
+      if (pathname === '/data/manifest.json') return json(route, {
         title: 'Large geospatial fixture',
         generated_at: '2026-07-15T00:00:00Z',
         counts: { datasets: 1, resources: 1, publishers: 1, relationships: 0 },
@@ -463,16 +466,16 @@ test.describe('geospatial Map state, accessibility and bounds', () => {
           relationships: []
         }
       });
-      if (url.pathname === '/data/overview.json') return json(route, {
+      if (pathname === '/data/overview.json') return json(route, {
         title: 'Large geospatial fixture',
         counts: { datasets: 1, resources: 1, publishers: 1, relationships: 0 }
       });
-      if (url.pathname === '/data/facets.json') return json(route, {
+      if (pathname === '/data/facets.json') return json(route, {
         schema: 'okf-facets.v1',
         generated_at: '2026-07-15T00:00:00Z',
         publisher: [{ value: 'large-publisher', count: 1 }]
       });
-      if (url.pathname === '/data/datasets-0.json') {
+      if (pathname === '/data/datasets-0.json') {
         await new Promise((resolve) => setTimeout(resolve, 700));
         return json(route, [{
           id: 'large-map',
@@ -485,14 +488,14 @@ test.describe('geospatial Map state, accessibility and bounds', () => {
           resource_count: 1
         }]);
       }
-      if (url.pathname === '/data/resources-0.json') return json(route, [{
+      if (pathname === '/data/resources-0.json') return json(route, [{
         id: 'large-wms',
         dataset: 'large-map',
         name: 'Large WMS',
         format: 'WMS',
         url: `${LARGE_ORIGIN}/service?service=WMS`
       }]);
-      if (url.pathname === '/data/publishers-0.json') return json(route, [{ id: 'large-publisher', name: 'large-publisher', title: 'Large Publisher' }]);
+      if (pathname === '/data/publishers-0.json') return json(route, [{ id: 'large-publisher', name: 'large-publisher', title: 'Large Publisher' }]);
       return json(route, { error: 'not found' }, 404);
     });
     const params = new URLSearchParams({ bundle: `${LARGE_ORIGIN}/okf-explorer.json`, view: 'map' });

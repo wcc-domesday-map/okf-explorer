@@ -1,4 +1,5 @@
 import type { LargeResourceReference } from '$lib/types';
+import { requireSameOriginHttpUrl } from '$lib/security/urlPolicy';
 import {
   type PreparedReleaseDataPlane,
   releaseDataRequest,
@@ -20,7 +21,7 @@ export interface SourceJsonResponse {
 }
 
 export function resolveUrl(path: string, base: string): string {
-  return new URL(path, base).toString();
+  return requireSameOriginHttpUrl(path, base, 'Bundle resource URL');
 }
 
 export function movedBundleTarget(raw: Record<string, unknown>, sourceUrl: string): string | null {
@@ -40,7 +41,7 @@ export async function fetchJson<T>(url: string, timeoutMs = 30000, attempts = 3,
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const signal = typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal ? AbortSignal.timeout(timeoutMs) : undefined;
     try {
-      const response = await fetch(url, { cache: 'default', signal });
+      const response = await fetch(url, { cache: 'default', redirect: 'error', signal });
       if (!response.ok) {
         const error = new Error(`${url}: ${response.status} ${response.statusText}`);
         if (attempt < attempts - 1 && RETRYABLE_STATUS_CODES.has(response.status)) {
@@ -180,6 +181,7 @@ export async function fetchJsonResource<T>(
       const response = await fetch(url, {
         cache: 'default',
         headers: distributed?.headers,
+        redirect: 'error',
         signal
       });
       if (!response.ok) {
@@ -302,6 +304,7 @@ async function fetchSourceJsonCandidate(
       const response = await fetch(url, {
         cache: 'default',
         headers: { Accept: 'application/json, application/*+json;q=0.9' },
+        redirect: 'error',
         signal
       });
       if (!response.ok) {

@@ -12,15 +12,34 @@ export type OkfNode = {
   aliases?: string[];
   tags?: string[];
   body?: string;
+  resource?: string;
+  source_url?: string;
+  source_id?: string;
+  source_record_id?: string;
+  retrieved_at?: string;
+  published_at?: string;
+  attribution?: string;
+  rights_url?: string;
+  reuse_basis?: string;
+  confidence?: string;
+  method?: string;
+  facts?: Array<{ label?: string; value?: unknown }>;
+  notes?: string[] | string;
+  semantic_types?: string[];
   [key: string]: unknown;
 };
 
 export type OkfRelationship = {
+  id?: string;
   source: string;
   target: string;
   kind?: string;
   type?: string;
   label?: string;
+  predicate?: string;
+  method?: string;
+  confidence?: string;
+  evidence?: string;
   [key: string]: unknown;
 };
 

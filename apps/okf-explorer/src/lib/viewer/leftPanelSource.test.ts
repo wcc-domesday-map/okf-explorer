@@ -152,13 +152,17 @@ describe('large-corpus left panel UX harness', () => {
     expect(pageSource).not.toContain('>Load full record</button>');
   });
 
-  it('opens source API responses inside Explorer without replacing the current window', () => {
+  it('opens same-origin source API responses inside Explorer and keeps external links navigable only', () => {
     expect(pageSource).toContain("import SourceInspector from '$lib/viewer/SourceInspector.svelte'");
     expect(pageSource).toContain('let largeSourceInspectorOpen = $state(false)');
     expect(pageSource).toContain("'View source data'");
     expect(pageSource).toContain('Open raw JSON ↗');
     expect(pageSource).toContain('target="_blank" rel="noopener noreferrer"');
-    expect(pageSource).toContain('fetchSourceJson(url)');
+    expect(pageSource).toContain('const resolvedUrl = safeFetchHref(url)');
+    expect(pageSource).toContain('fetchSourceJson(resolvedUrl)');
+    expect(pageSource).toContain('External source preview disabled');
+    expect(pageSource).toContain('sameOriginResourceUrl(value, currentBundleLinkBase(), location.href)');
+    expect(pageSource).toContain('safeFetchTemplate(legislationExtension.remote_full_text_search)');
     expect(pageSource).not.toContain('<summary>Source API JSON</summary>');
     expect(pageSource).not.toContain('>Open API</a>');
   });

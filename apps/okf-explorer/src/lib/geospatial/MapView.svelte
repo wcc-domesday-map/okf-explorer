@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { publicHttpHrefForBundle, sameOriginResourceUrl } from '$lib/security/urlPolicy';
   import {
     GEOSPATIAL_SIGNAL_LABELS,
     geospatialFilterLabel,
@@ -20,6 +21,7 @@
     records: GeospatialRecord[];
     filter: string;
     selectedRoute: string;
+    bundleUrl: string;
     loading?: boolean;
     onselect: (route: string) => void;
     onfilter: (filter: string) => void;
@@ -34,12 +36,20 @@
     records: GeospatialRecord[];
   };
 
-  let { records, filter, selectedRoute, loading = false, onselect, onfilter }: Props = $props();
+  let { records, filter, selectedRoute, bundleUrl, loading = false, onselect, onfilter }: Props = $props();
   let preview = $state<GeospatialPreview | null>(null);
   let previewDrawing = $state<PreviewDrawing | null>(null);
   let previewLoading = $state(false);
   let previewError = $state('');
   let previewResource = $state<GeospatialResource | null>(null);
+
+  function safeHref(value: unknown): string {
+    return publicHttpHrefForBundle(value, bundleUrl, location.href) || '';
+  }
+
+  function safeFetchHref(value: unknown): string {
+    return sameOriginResourceUrl(value, bundleUrl, location.href) || '';
+  }
 
   const visibleRecords = $derived(records.filter((record) => geospatialFilterMatches(record, filter)));
   const selectedRecord = $derived(records.find((record) => record.route === selectedRoute) || visibleRecords[0]);
@@ -151,13 +161,19 @@
   }
 
   async function showPreview(resource: GeospatialResource) {
+    const fetchUrl = safeFetchHref(resource.url);
+    if (!fetchUrl) {
+      previewError = 'External on-demand previews are disabled in the Warwickshire same-origin profile.';
+      previewResource = resource;
+      return;
+    }
     previewLoading = true;
     previewError = '';
     preview = null;
     previewDrawing = null;
     previewResource = resource;
     try {
-      const result = await loadGeospatialPreview(resource);
+      const result = await loadGeospatialPreview({ ...resource, url: fetchUrl });
       preview = result;
       previewDrawing = buildPreviewDrawing(result);
     } catch (error) {
@@ -313,8 +329,12 @@
               <article class="map-resource">
                 <div><strong>{resource.label}</strong><span>{resource.kind.toUpperCase()}{resource.format ? ` · ${resource.format}` : ''}</span></div>
                 <div class="map-resource-actions">
-                  {#if resource.previewable}<button type="button" disabled={previewLoading} onclick={() => void showPreview(resource)}>{previewLoading && previewResource?.url === resource.url ? 'Loading…' : 'Preview on demand'}</button>{/if}
-                  <a href={resource.url} target="_blank" rel="noopener noreferrer">Open source ↗</a>
+                  {#if resource.previewable && safeFetchHref(resource.url)}
+                    <button type="button" disabled={previewLoading} onclick={() => void showPreview(resource)}>{previewLoading && previewResource?.url === resource.url ? 'Loading…' : 'Preview on demand'}</button>
+                  {:else if resource.previewable && safeHref(resource.url)}
+                    <button type="button" disabled title="Use the source link; this profile does not fetch external resources">External preview disabled</button>
+                  {/if}
+                  {#if safeHref(resource.url)}<a href={safeHref(resource.url)} target="_blank" rel="noopener noreferrer">Open source ↗</a>{:else}<span>{resource.url}</span>{/if}
                 </div>
               </article>
             {:else}
@@ -328,8 +348,8 @@
     {#if previewLoading || previewError || previewDrawing}
       <section class="geo-preview" aria-label="On-demand spatial preview">
         <header>
-          <div><p class="eyebrow">External data loaded on demand</p><h3>{previewResource?.label || 'Spatial preview'}</h3></div>
-          {#if previewResource}<a href={previewResource.url} target="_blank" rel="noopener noreferrer">Open source ↗</a>{/if}
+          <div><p class="eyebrow">Same-origin data loaded on demand</p><h3>{previewResource?.label || 'Spatial preview'}</h3></div>
+          {#if previewResource}{#if safeHref(previewResource.url)}<a href={safeHref(previewResource.url)} target="_blank" rel="noopener noreferrer">Open source ↗</a>{:else}<span>{previewResource.url}</span>{/if}{/if}
         </header>
         {#if previewLoading}
           <div class="map-empty" role="status">Discovering a bounded feature preview…</div>

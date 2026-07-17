@@ -1,20 +1,30 @@
 import type { BundleRegistryEntry } from '$lib/types';
+import { requireSameOriginHttpUrl, sameOriginHttpUrl } from '$lib/security/urlPolicy';
 import { fetchJson } from './fetch';
 
-const HISTORY_KEY = 'okfExplorerBundleHistory:v2';
+const HISTORY_KEY = 'okfExplorerBundleHistory:v3';
 
-export function loadHistory(): BundleRegistryEntry[] {
+function safeEntry(entry: BundleRegistryEntry, baseUrl: string): BundleRegistryEntry | null {
+  const url = sameOriginHttpUrl(entry?.url, baseUrl);
+  return url ? { ...entry, url } : null;
+}
+
+export function loadHistory(baseUrl: string): BundleRegistryEntry[] {
   try {
     const parsed = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]') as BundleRegistryEntry[];
-    return Array.isArray(parsed) ? parsed.filter((entry) => entry?.url).slice(0, 20) : [];
+    return Array.isArray(parsed)
+      ? parsed.map((entry) => safeEntry(entry, baseUrl)).filter((entry): entry is BundleRegistryEntry => Boolean(entry)).slice(0, 20)
+      : [];
   } catch {
     return [];
   }
 }
 
-export function rememberHistory(entry: BundleRegistryEntry): BundleRegistryEntry[] {
-  const history = loadHistory().filter((item) => item.url !== entry.url);
-  const next = [{ ...entry, kind: entry.kind || 'history' }, ...history].slice(0, 20);
+export function rememberHistory(entry: BundleRegistryEntry, baseUrl: string): BundleRegistryEntry[] {
+  const safe = safeEntry(entry, baseUrl);
+  const history = loadHistory(baseUrl);
+  if (!safe) return history;
+  const next = [{ ...safe, kind: safe.kind || 'history' }, ...history.filter((item) => item.url !== safe.url)].slice(0, 20);
   try {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
   } catch {
@@ -23,10 +33,13 @@ export function rememberHistory(entry: BundleRegistryEntry): BundleRegistryEntry
   return next;
 }
 
-export async function loadRegistry(url: string): Promise<BundleRegistryEntry[]> {
+export async function loadRegistry(url: string, baseUrl: string): Promise<BundleRegistryEntry[]> {
   try {
-    const registry = await fetchJson<{ bundles?: BundleRegistryEntry[]; entries?: BundleRegistryEntry[] }>(url);
-    return [...(registry.bundles || []), ...(registry.entries || [])].filter((entry) => entry.url);
+    const registryUrl = requireSameOriginHttpUrl(url, baseUrl, 'Bundle registry URL');
+    const registry = await fetchJson<{ bundles?: BundleRegistryEntry[]; entries?: BundleRegistryEntry[] }>(registryUrl);
+    return [...(registry.bundles || []), ...(registry.entries || [])]
+      .map((entry) => safeEntry(entry, registryUrl))
+      .filter((entry): entry is BundleRegistryEntry => Boolean(entry));
   } catch {
     return [];
   }

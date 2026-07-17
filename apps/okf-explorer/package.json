@@ -1,7 +1,7 @@
 {
   "name": "@okf/explorer",
   "private": true,
-  "version": "0.4.2",
+  "version": "0.4.3-warwickshire.1",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -11,7 +11,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
-    "test:e2e:pages": "PLAYWRIGHT_BASE_URL=https://chris-page-gov.github.io/okf-explorer/ playwright test",
+    "test:e2e:pages": "node -e \"if (!process.env.PLAYWRIGHT_BASE_URL) { console.error('Set PLAYWRIGHT_BASE_URL to the reviewed organisation-restricted deployment.'); process.exit(1) }\" && playwright test",
     "test:e2e:headed": "playwright test --headed",
     "benchmark:search": "node ../../scripts/benchmark_static_search.mjs"
   },

@@ -71,7 +71,10 @@ export function parseOfficialSearch(xml: string): SearchResultDoc[] {
 
 export async function searchOfficialLegislation(template: string, query: string): Promise<SearchResultDoc[]> {
   const url = template.replace('{query}', encodeURIComponent(query));
-  const response = await fetch(url, { headers: { Accept: 'application/atom+xml, application/xml;q=0.9' } });
+  const response = await fetch(url, {
+    headers: { Accept: 'application/atom+xml, application/xml;q=0.9' },
+    redirect: 'error'
+  });
   if (!response.ok) throw new Error(`Official full-text search failed (${response.status})`);
   return parseOfficialSearch(await response.text());
 }
