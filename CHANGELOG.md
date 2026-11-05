@@ -15,6 +15,8 @@
 - Keep the fork's browser CI on the Warwickshire same-origin journey while the
   inherited upstream cross-origin fixtures are adapted; record the resulting
   browser coverage gap in the profile documentation.
+- Regenerate version-bound semantic projections and the CycloneDX inventory
+  with the Warwickshire fork identity.
 
 ## v0.8.1 - 2026-11-03 - Legislation release acceptance correction
 
