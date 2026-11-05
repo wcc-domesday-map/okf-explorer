@@ -1,4 +1,20 @@
-# OKF Explorer Evaluation Harness
+# OKF Explorer evaluation harness
+
+The encoded record route sharing change has fresh local Heritage question and
+journey observations, run on 29 October 2026 and bound to its exact app build.
+The previous receipt and both compressed result files are preserved byte for
+byte under `validation/encoded-route-sharing/2026-10-28/pre-update/`, with a
+SHA-256 inventory. These local observations do not establish public deployment
+or domain-specific policy acceptance.
+
+The producer-declared catalogue report links change also has fresh local
+Heritage observations, bound to Explorer tree
+`e1aad43dc8236e387654c86d67f1575ebdd4fd94256ea1e9628a879829e34c4a`. All 100
+questions scored at least 80, with a 92.6 average, and all three local journeys
+passed. The previous receipt and compressed results are preserved byte for
+byte under `validation/catalogue-report-links/2026-10-29/pre-update/`, with a
+SHA-256 inventory. These local observations do not establish public deployment
+or domain-specific policy acceptance.
 
 This repository now carries repeatable browser evaluation suites for the UK
 Government APIs OKF pack, the hosted GOV.UK CKAN OKF pack, and future large OKF
@@ -11,6 +27,168 @@ The suite evaluates three publication goals:
   information clearly?
 - Are terms such as confidence, licence basis, API evidence and metadata quality
   defined in the UI instead of being unexplained percentages?
+
+### Evidence tied to an Explorer build
+
+The Heritage local candidate receipt binds its browser results to an exact
+Explorer application tree and build manifest. A change to application bytes
+requires fresh runtime evidence, even when the frozen Heritage source corpus
+is unchanged. A prior receipt cannot establish that the new application was
+tested. Its earlier version remains available in Git history.
+
+Refresh the 100-question suite and the three local journeys against the current
+assembled Site, preserving the original source snapshot dates. Serve the Site
+at a loopback root with `/publication/` mapped internally to the repository's
+checked `evaluation/heritage/` corpus directory. The Site intentionally excludes
+those runtime corpus files. Use `--bundle` for the question suite and
+`--candidate-bundle` plus `--bundle-root` for the journeys, so tiny, faithful and
+synthetic fixtures keep their own starting bundles. Materialise the new
+results with `scripts/build_heritage_local_candidate_receipt.py`, supplying
+both fresh result files, the current Site candidate receipt and an observation
+time after both executions. The materialiser checks scores, journey outcomes,
+source roots, app identity and timestamps before writing evidence.
+
+The reading-help corpus update preserved the preceding receipt and both
+compressed browser results byte for byte under the repository path
+`validation/reading-help/2026-09-27/pre-corpus-consumer/`.
+The visible-help update also preserves the preceding receipt and both compressed results byte for byte under `validation/reading-help/2026-10-01/pre-visible-help/`. Its refreshed 100-question suite and three local journeys bind the application that displays help on selection.
+
+The current receipt is regenerated only from fresh runs against the assembled
+Site and its exact Explorer build. The 100 questions are deterministic browser
+checks, not model-authored legal answers.
+
+The beginner entry-link update preserves the preceding receipt and both
+compressed results under `validation/beginner-entry/2026-10-24/pre-entry-links/`,
+with a SHA-256 inventory. Fresh runs bind its navigation changes to the current
+application build while retaining the original Heritage source snapshot.
+
+With the Site and `/publication/` alias served at `http://127.0.0.1:8002/`, the
+browser commands are:
+
+```sh
+node scripts/evaluate_okf_explorer.mjs \
+  --base-url http://127.0.0.1:8002/ \
+  --bundle /publication/okf-explorer.json \
+  --suite evaluation-foundry/fixtures/heritage-warwickshire/questions.json \
+  --limit 100 --out tmp/heritage-questions
+
+node scripts/evaluate_okf_explorer.mjs \
+  --base-url http://127.0.0.1:8002/ \
+  --candidate-bundle /okf-explorer.json \
+  --bundle-root http://127.0.0.1:8002/publication/ \
+  --journeys-only \
+  --journeys evaluation-foundry/fixtures/heritage-warwickshire/journeys.json \
+  --journey-id journey-tiny --journey-id journey-faithful \
+  --journey-id journey-synthetic-isolation --out tmp/heritage-journeys
+```
+
+Keep the journey candidate root-relative as shown: the receipt expects that
+declaration and verifies the resolved URL. Do not pass `--bundle` for the journey
+run; it deliberately overrides all starting bundles and would replace the tiny
+and synthetic fixtures with the faithful corpus. Set the documented Playwright
+package and browser executable environment variables when using a local browser.
+
+These are local Explorer runtime checks. Public deployment verification and
+domain-specific policy evaluation remain separately recorded activities.
+
+### Fresh candidate observations from CI
+
+The repository owner maintains the separate `heritage-candidate-evidence` CI
+job. It runs when an app or Site change requires fresh observations and can also
+run through the existing manual CI workflow. It uses that run's exact app
+artefact, assembles the Site at the checked-out commit, and executes the same
+100 questions and three journeys above with installed Google Chrome. It has
+read-only repository permissions, a 20-minute deadline and seven-day artefact
+retention. It changes no deployment, workflow trigger or retained-receipt gate.
+
+The bounded local server is `scripts/serve_heritage_candidate.mjs`. It binds only
+to `127.0.0.1`, serves regular files within the assembled `_site` and checked
+Heritage corpus roots, rejects traversal and symlink escapes, and accepts only
+GET and HEAD. Site files take precedence; `/publication/` explicitly addresses
+the corpus, with root corpus aliases retained for the canonical journey. It
+streams files without executing them and performs no remote proxying. The
+default port is 8002; `HERITAGE_EVIDENCE_PORT` accepts an integer from 1 to 65535.
+
+The threats are stale app identity, changed source roots, failed source access,
+unsafe file disclosure and mistaking observations for acceptance. The ordinary
+app and adversarial gates precede execution. The job uses only the reviewed public
+Heritage fixtures and declared source links; it copies no account-specific
+payload or credentials. A failed navigation remains a failed journey. A local
+network restriction must not be avoided by changing an assertion or substituting
+a source response. Running the unchanged checks on an authorised CI runner is
+separate execution evidence, not a proxy around the local environment.
+
+The artefact `heritage-candidate-evidence-COMMIT` contains only the existing
+`okf-explorer-evaluation-results.v1` question and journey JSON/Markdown, the
+`okf-site-candidate-receipt.v1` Site receipt, the app build manifest, publication
+identity and a plain `source-commit.txt`. `COMMIT` is the checked-out workflow
+commit, including the PR merge candidate where applicable. The producer never
+writes the tracked local receipt, commits changes or promotes a deployment.
+The independent `python-contracts` validation remains required.
+
+When an authorised review environment cannot download artefact storage, the same
+successful job emits a bounded text transport in its ordinary log. The helper
+`scripts/emit_heritage_candidate_transport.py` reads only six fixed public files:
+the two result JSON files, Site receipt, app manifest, publication identity and
+source commit. It rejects symlinks, non-regular files, files over 1 MiB, total
+input over 2 MiB, ZIP output over 256 KiB and log output over 384 KiB. It makes
+no network request and reads no environment values. The deterministic ZIP uses
+fixed timestamps, order and permissions. `OKF_HERITAGE_PUBLIC_EVIDENCE_V1 BEGIN`
+declares ZIP byte length, SHA-256 and chunk count; numbered `CHUNK n/total` lines
+contain at most 8192 base64 characters, followed by an `END` marker. The complete
+payload is validated before any part is printed. Normal artefact upload remains.
+For log transport, require one complete envelope from the successful producer
+job, all chunks exactly once in order, strict base64 decoding, the declared byte
+length and SHA-256, and exactly the six regular ZIP entries before extraction.
+This transport changes no result schema or acceptance requirement.
+
+To import an observation, first verify the workflow run, source commit and
+downloaded artefact identity against the reviewed candidate. Compare its exact
+app tree and manifest with the local checked build. Preserve the previous
+receipt and both compressed results byte for byte, then run the existing
+materialiser with the downloaded inputs:
+
+```sh
+uv run --locked python scripts/build_heritage_local_candidate_receipt.py \
+  --question-results tmp/heritage-candidate/questions/results.json \
+  --journey-results tmp/heritage-candidate/journeys/results.json \
+  --site-candidate-receipt tmp/heritage-candidate/site-candidate-receipt.json \
+  --observed-at OBSERVATION_TIME_AFTER_BOTH_RUNS
+```
+
+The materialiser independently validates scores, journey outcomes, corpus roots,
+app identity, timestamps and result hashes. Review and commit its three generated
+files separately; rerun the retained-receipt tests. Failed or unmatched results
+cannot supply acceptance. The receipt records the executed Site candidate. A
+later evidence-only commit changes the publication identity of a newly assembled
+Site; it does not retroactively change the recorded candidate or establish a
+deployed merge commit. Pages has its own exact-commit verification.
+
+The compact facet update's retained observations came from
+[CI run 40105915998](https://github.com/chris-page-gov/okf-explorer/actions/runs/40105915998),
+at checked-out source `5021656698ebc424013e976c178cfc89e49268ca`.
+All 100 questions passed with a mean score of 92.6; all three journeys passed
+their 40 actions and 26 assertions. The imported receipt retains that executed
+Site identity and binds the compact app tree
+`d127aadb96a77711d5f7cc7aec8cf731cbf5ec1e3d49304d8132189ea4991f93`.
+The preceding receipt and both compressed results are preserved byte for byte
+under `validation/compact-facets/2026-10-24/pre-compact/`.
+
+On 27 October 2026, the record source reference update received fresh observations
+from [CI run 40492019206](https://github.com/chris-page-gov/okf-explorer/actions/runs/40492019206),
+[successful job 122149016399](https://github.com/chris-page-gov/okf-explorer/actions/runs/40492019206/job/122149016399).
+The reviewed PR head was `f71f776253d54a51552f061a1b10b0b922b99023`; the job
+executed merge candidate `e3c0eaa1bd48b99320e57627639e5a1139867146`.
+All 100 questions scored at least 80, with a mean of 92.6. The tiny, faithful
+and synthetic-isolation journeys all passed. Both result files and the Site
+receipt bind app tree
+`827ac61a364500a2c73ad949dfda36f0839e54056644edd414ddb34f96aee960`
+and build manifest
+`bbb482b252b9385149ab06a0bb5cbaae778e65a9498ea5c06d3683f4aa297d7a`.
+[The retained evidence inventory](../validation/record-source-references/2026-10-27/README.md)
+links the previous receipt, unchanged CI observations and their SHA-256 inventories.
+The materialised receipt records this executed candidate; deployment verification
+remains a separate check.
 
 The rubric is aligned with GOV.UK service-quality guidance: user needs, simple
 task completion, accessibility, open standards, security/privacy, measurable
@@ -62,7 +240,7 @@ Additional evidence now captures the OS Data Hub graph failures:
 - `facet-record-type-graph-context-2026-07-08.png`: record-type counts looked
   like a false graph breakdown when the active reduction was not explicit.
 
-## Interaction Checks
+## Interaction checks
 
 The browser harness and static lockstep tests should treat these behaviours as
 publication requirements for large OKF packs:
@@ -70,10 +248,27 @@ publication requirements for large OKF packs:
 - Closed facet sections must not render or scan their full value lists. Opening
   a facet should show a facet-local search box, loading state if hydration is
   needed, and paged values.
+- Provider presentation defaults must affect facet labels, order, initial
+  pinning, control choice and panel tabs. Device-local user pin/hide/reorder
+  preferences take precedence for one bundle and **Reset** restores the
+  provider profile.
+- Manageable facets expose a proportional distribution with a textual summary
+  only when the available vocabulary counts are complete; truncated top-value
+  data is labelled as a preview. High-cardinality facets expose examples and
+  search without rendering a long default list. A corpus with tens of thousands
+  of values requires a sharded facet vocabulary rather than eager hydration.
 - Facet search must normalise hyphenated, underscored and spaced terms the same
   way for the query and the candidate value.
-- A plain click on a facet value replaces the previous value for that facet;
-  Ctrl-click, Cmd-click or Shift-click opts into multi-select.
+- A plain click on a facet bar segment or value previews it without changing the
+  filter URL; Ctrl-click or Cmd-click builds a highlighted set. Double-click,
+  Enter or the explicit commit control applies that set as a filter.
+- Low-cardinality facet distributions must be available before a facet is opened
+  and must remain numerically consistent after full-record hydration. The ONS
+  regression fixture expects 382 `region` records both before and after Graph
+  loads nested `geography_metadata`.
+- Facets support direct pinning, multiple open pinned sections and drag reorder,
+  with action-menu move controls as the keyboard fallback. No legacy **Adjust**
+  action is offered and value right-click has no selection meaning.
 - A plain click on a graph node inspects it in the data card. A double-click is
   the graph navigation/reduction gesture.
 - Dense graph stack expansion should re-group by a visible semantic dimension
@@ -120,7 +315,7 @@ The score is additive and totals 100 points:
 This is not an assurance score for the source APIs. It scores how well the OKF
 Explorer helps a reader inspect the available public metadata.
 
-## Running Locally
+## Running locally
 
 Run the focused Map UI suite directly from the Explorer application:
 
@@ -151,13 +346,13 @@ if documentation refers to a test that does not exist.
 Build the static site first:
 
 ```sh
-python3 scripts/build_site.py
+uv run --locked python scripts/build_site.py
 ```
 
 Serve the repository root:
 
 ```sh
-python3 -m http.server 8002 --bind 127.0.0.1
+uv run --locked python -m http.server 8002 --bind 127.0.0.1
 ```
 
 Run the full 100-question browser suite:
@@ -252,6 +447,96 @@ The legislation journey manifest can be validated or run the same way by
 substituting `evaluation/legislation/journeys.json`. Its legal-answer questions
 continue to be scored by `scripts/evaluate_legislation_answers.py`; the browser
 journeys test the Explorer discovery stage, not legal correctness.
+
+## External bundle runtime evidence
+
+An external producer can run a declarative journey manifest against its frozen
+bundle with:
+
+```sh
+pnpm acceptance:bundle -- \
+  --bundle-root /absolute/path/to/bundle \
+  --journeys /absolute/path/to/journeys.json \
+  --bundle-label bundle \
+  --journey-label evaluation/journeys.json \
+  --output /absolute/path/to/runtime-receipt.json
+```
+
+The command acquires one checkout-scoped single-writer lock before it performs
+the deterministic Explorer build. A concurrent invocation is refused before it
+can alter the build directory, launch Chromium or create a receipt. The inner
+runner verifies the live lock, its wrapper purpose and its parent process before
+reading an input. On POSIX systems the wrapper retains the process-group
+identity, terminates descendants and releases the lock only after it verifies
+that the group has gone. A left-over lock is not silently broken: inspect it
+and confirm that no acceptance process is active before removing it.
+After the deterministic build succeeds, the wrapper durably adds the exact
+command, build script and canonical build-manifest identity to the live lock.
+The inner runner recomputes that attestation before Chromium starts and again
+after it closes; a merely present or previously generated `build/` directory
+cannot satisfy the gate.
+
+Journey actions may use a bounded `capture_attributes` step. For ranked search
+evidence, first wait for the expected canonical result and then capture the
+stable canonical URL attributes exposed by Explorer:
+
+```json
+[
+  {
+    "type": "wait_for_ranked_result",
+    "canonical_url": "https://www.gov.uk/government/organisations/land-registry"
+  },
+  {
+    "type": "capture_attributes",
+    "id": "ranked-result-urls",
+    "selector": "[data-okf-ranked-results=\"primary\"] [data-okf-ranked-result]",
+    "name": "data-result-canonical-url",
+    "min_items": 1,
+    "max_items": 10
+  }
+]
+```
+
+`wait_for_ranked_result` derives the expected query from the current non-empty
+`q` URL parameter. It waits until the primary result list reports both that
+exact query and `data-okf-search-state="settled"`, then requires exactly one
+visible row with the declared credential-free absolute HTTP(S) canonical URL.
+A genuinely loading search retains the 90-second journey ceiling. A settled
+empty or wrong result fails immediately instead of waiting for an absent title
+selector. The same exact object can be used as a terminal assertion by changing
+its type to `ranked_result`.
+
+The capture then reads count, order and attributes in one browser evaluation
+so a rerender cannot mix two result states. Every retained ranked row in the
+bounded capture must provide a non-empty, credential-free absolute HTTP(S)
+canonical URL; an absent or unsafe URL fails the journey instead of shifting
+later ranks.
+
+The receipt retains the values in rendered order, together with the selector,
+attribute, bound and total number of matching elements. The manifest contract
+bounds bytes, journeys, actions, assertions, observations, selectors and text;
+runtime retention also bounds requests, console events, page errors and final
+receipt bytes. It accepts only `href` or `data-*` captures, a maximum of 100
+values and unique observation identifiers within each journey. Explorer stages
+the bundle and app build into private independent snapshots, serves only those
+declared bytes through no-follow file descriptors, and rejects a source tree,
+private snapshot, journey manifest or executable material whose final identity
+no longer matches its initial value. Global entry, file, byte, telemetry,
+journey-time and run-time limits are enforced before retained evidence is
+published. Request assertions use only the current journey and are evaluated
+after its browser context closes, so a late request, console error or page error
+cannot evade the terminal result. Retained browser-request URLs reject
+credentials and omit query strings and fragments.
+
+The final receipt is written as a complete same-directory temporary file,
+flushed, linked into its previously absent destination without replacement,
+and followed by a directory flush and independent byte verification. The
+output parent is physically resolved outside both input trees and its directory
+identity is rechecked before and after publication.
+A producer's evaluator should bind the receipt to the exact bundle tree,
+manifest and Explorer consumer, then derive rank-sensitive metrics from this
+observation. A separate search model may remain diagnostic, but must not
+substitute for the product observation in a product acceptance gate.
 
 ## Corpus Boundary Note
 

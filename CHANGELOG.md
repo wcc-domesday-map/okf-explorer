@@ -1,49 +1,1384 @@
 # Changelog
 
-All notable changes to the Warwickshire same-origin profile are recorded here.
-
-## [Unreleased]
-
-### Fixed
-
-- Made the Warwickshire registry's YAML-LD source authoritative and regenerated
-  all registry projections from it, eliminating CI drift from the same-origin
-  default bundle.
-
-## [0.4.3-warwickshire.1] - 2026-07-16
-
-### Added
-
-- Added an accessible FOI-oriented provenance panel for Warwickshire
-  small-bundle records, including source identifiers, retrieval/publication
-  times, attribution, rights, reuse basis, confidence, method, facts, cautions
-  and source body.
-- Added visible relationship provenance and bundle-relative evidence links.
-- Documented the parent-owned `/knowledge/` and
-  `/okf/warwickshire-public/` assembly contract.
+## Unreleased
 
 ### Changed
 
-- Defaulted Explorer and its registry to the co-published Warwickshire public
-  bundle and labelled this package as the Warwickshire same-origin profile.
-- Resolved relative provenance and resource links from the loaded bundle URL
-  while retaining safe explicit external source links.
-- Relabelled cross-origin source JSON, map preview and legislation live-text
-  actions as unavailable instead of allowing Explorer to request them.
+- Reconcile the Warwickshire same-origin fork with canonical OKF Explorer
+  `dcd0c43e29593436b13c59271c75d37d06e2b754` (v0.8.1), including the
+  Evaluation Foundry source and current Reader, while retaining the restricted
+  parent assembly and fail-closed standalone Pages guard.
+- Keep bundle, descriptor and resource fetches on the serving origin, reject
+  redirects, preserve safe external source navigation, and expose Warwickshire
+  provenance in the updated Reader. Adapt the browser regression journeys to
+  the new `/explore/` route.
+- Keep the fork's browser CI on the Warwickshire same-origin journey while the
+  inherited upstream cross-origin fixtures are adapted; record the resulting
+  browser coverage gap in the profile documentation.
+- Regenerate version-bound semantic projections and the CycloneDX inventory
+  with the Warwickshire fork identity.
+- Align release and CI topology tests with the fork's guarded Pages workflow
+  while retaining the Foundry, deterministic build and same-origin checks.
 
-### Security
+## v0.8.1 - 2026-11-03 - Legislation release acceptance correction
 
-- Restricted network bundles, descriptors, moved-bundle redirects and resource
-  fetches to the serving origin, added a hash-compatible CSP with
-  `connect-src 'self'`, and rejected fetch redirects.
-- Retained local file upload while sanitising bundle-controlled links and
-  preventing uploaded content from establishing a network base.
-- Replaced the inherited automatic public Pages deployment with a
-  manual, fail-closed guard; the restricted parent repository is the only
-  supported deployment path.
-- Added unit and browser regressions for malicious URLs, same-origin resources,
-  external-link-only controls, provenance rendering and the core small-bundle
-  views.
+- Bind the UK Legislation runtime-acceptance contract to Explorer v0.8.1 so
+  the final receipt can prove the current release identity instead of the
+  superseded v0.6.2 dependency.
+- Select the model-assisted relationship filter by its stable data identity,
+  rather than an accessible label that now includes the live relationship
+  count. This preserves the visible, descriptive label while restoring the
+  governed cross-browser journey.
+- Add regression coverage for both the exact release binding and stable filter
+  selector. Explorer v0.8.0 remains an immutable published release.
+
+## v0.8.0 - 2026-11-03 - Consolidated publication and Legislation v0.4
+
+- Publish the accumulated Explorer, evidence-workbench, learning, corpus-map,
+  bounded-source and dependency-maintenance work recorded below since v0.7.0.
+- Register the independently versioned UK Legislation and UK Whole-Law
+  publications as stable v0.4.0 bundles, without changing their July source
+  snapshots or conflating bundle release 0.4.0 with OKF specification 0.2.
+- Retain the optional, read-only `document.modelContext` WebMCP adapter and its
+  ordinary browser and machine-readable fallbacks. Registration remains
+  distinct from proof that a particular AI host invoked a page tool.
+- Update the repository's remote MCP transport to
+  `@modelcontextprotocol/node` 2.1.2 and the legacy comparison SDK to 1.32.2.
+  Pin patched transitive HTTP parsing and serving dependencies so request-body,
+  JSON-RPC batch, path-decoding and compressed-body denial-of-service controls
+  are present. A repository release does not claim that the separately hosted
+  service has been redeployed.
+- Prepare one exact Explorer v0.8.0 Site candidate for Pages, real-browser
+  verification and immutable release; evidence about the deployed candidate
+  remains outside the candidate bytes.
+
+## Corpus Map review publication — 2 November 2026
+
+- Publish the dated Corpus Map review through the documentation and reference
+  indexes, preserving its research baseline and proposed status.
+- Link to the versioned arXiv source instead of a local PDF copy.
+
+## Producer-declared catalogue report links — 29 October 2026
+
+- Show bounded, validated HTTPS links from a large-corpus descriptor beside
+  the active catalogue title, while keeping older descriptors compatible.
+- Reject explicit port zero as an invalid HTTPS destination.
+- Document the optional `related_links` descriptor field and test accepted,
+  absent and rejected values.
+- Refresh the exact-build Heritage receipt from 100 browser-scored questions
+  and three local journeys; preserve the earlier receipt and results.
+
+## Encoded record route sharing evidence — 29 October 2026
+
+- Refresh the Heritage 100-question and three-journey browser observations for
+  the encoded record route sharing app build, preserving the previous receipt
+  and compressed results byte for byte.
+
+## Preserve encoded record routes in shared links — 28 October 2026
+
+- Serialise routes containing percent escapes as opaque `record:` base64url
+  fragments so refresh and browser history restore the same record route.
+- Keep ordinary route fragments readable and apply the same encoding to
+  record links opened in a separate tab.
+- Add focused round-trip coverage for encoded slashes, spaces, Unicode, plus
+  and hash characters, and malformed percent escapes.
+
+## Bounded record source references — 27 October 2026
+
+- Load source references for one selected record through an optional,
+  snapshot-bound index with exact byte, digest and row bindings. Keep shared
+  chunks within finite loading and cache limits.
+- Keep Reader source actions and the selected Resources view independent of
+  whole-corpus hydration, preserving older bundles' existing behaviour.
+- Display the hydrated record title for native record routes, including routes
+  whose kind is not `dataset`.
+- Load selected Reader records after hash navigation and browser history changes
+  as well as on the first page load.
+- Use the supplied source label for link-only references and remove automatic
+  official-source claims. Unknown source media types and availability remain
+  explicit; citations do not become downloadable data.
+- Refresh the exact-build Heritage receipt from successful CI execution of all
+  100 questions and three unchanged journeys, preserving the preceding evidence.
+
+## Corpus Map research and Microsoft integration review — 26 October 2026
+
+- Assess the supplied CorpusMap preprint against the OKF+ bundle,
+  semantic and context-assembly design at the recorded baseline, including the
+  importance of relevant starting candidates and the limits of reported token savings.
+- Propose an optional entity navigation profile, Microsoft consumer routes
+  and a bounded comparative pilot with identity, provenance and access checks.
+  Keep these proposals distinct from implemented profiles and tenant evidence.
+
+## Compact facet navigation — 24 October 2026
+
+- Restore slim colour bars and compact folded facet rows. Put colour controls
+  in each row's header and keep the longer explanation in optional help.
+- Retain labelled keyboard controls, 36 px header targets, selection and pinning.
+  Reduce spacing around Search/Ask OKF and keep the facet tabs within their pane.
+- Retain fresh Heritage browser observations from a separate CI job for reviewed
+  receipt refreshes, while preserving the existing receipt-validation gates.
+- Add a bounded CI log transport with byte counts and hashes for importing the
+  public browser results into restricted workspaces.
+- Refresh the compact app's exact-build Heritage receipt from successful CI
+  execution of all 100 questions and three unchanged browser journeys.
+- Align large- and small-bundle browser journeys with the colour disclosure
+  and optional help, retaining contrast, selection and bounded-loading checks.
+
+## GIS AI GO learning integration — 24 October 2026
+
+- Reuse the large Reader's unassessed learning presentation for linked practice
+  paths, suggested prerequisites and supporting evidence routes.
+- Inspect retained OKF+ source context and explicit metadata gaps beside the
+  selected record, preserving the original metadata and source revision.
+- Package the existing app with the complete bounded GIS metadata and context
+  projections for a portable local review, with build and file identities.
+
+## Clear beginner and repository entry links — 24 October 2026
+
+- Put a clearly labelled HTML beginner guide link near the top of the README,
+  alongside the website and documentation map.
+- Keep the learning hub as the repository's default website. Add visible
+  beginner guide and GitHub repository links above its introduction, including
+  on narrow screens, and name the guide consistently in the main navigation.
+- Preserve the previous Heritage browser evidence and rerun its 100-question
+  suite and three local journeys to refresh the exact-build receipt.
+
+## P0 advisory follow-up — 23 October 2026
+
+- Correct the eight additional low/moderate JavaScript alerts exposed by the
+  post-merge dependency refresh: adopt SvelteKit 3.1.0 with static adapter 4.0.0
+  and update the service's development-only fast-uri to 3.1.9.
+- Move framework settings into Vite, preserve deterministic versioning,
+  prerender handling and relative paths, and declare the existing source alias
+  explicitly. Retain disabled deployment polling and the static delivery model.
+- Make the cookie security override conditional so it cannot downgrade Kit 3's
+  required cookie 2 dependency. Add dependency-floor regression controls and
+  regenerate the software inventory and build-bound browser evidence.
+- Recheck stable component releases, apply compatible Svelte 5.57.2,
+  Vite 8.3.5 and svelte-check 4.7.7 patches, and pin pnpm 10.34.7.
+  Pin Node 24.22.1 LTS and 26.12.1 Current security releases in the existing
+  CI lines. Record retained governance pins and proposed maintenance separately.
+
+## P0 implementation review and corrections — 23 October 2026
+
+- Record the whole-implementation boundary review, coverage inventory and six
+  validated findings alongside the updated architecture plan.
+- Reject evidence redirects before following them, bound workbench requests
+  and preserve caller cancellation. Isolate compatibility worker caches and
+  tolerate malformed or unavailable saved pins.
+- Escape embedded viewer JSON without changing its source graph, and pin the
+  service's patched Zod 4.6.7 dependency.
+- Address the 44 Python lockfile alerts with targeted Pillow, certifi,
+  multidict and urllib3 updates, resolution constraints and rollback guards.
+  Keep the governed Python and uv versions unchanged.
+- Add regression controls and preserve the previous build-bound Heritage
+  evidence before refreshing candidate assurance. Independent service hosting,
+  domain acceptance and AI-client compatibility retain separate gates.
+
+## Architecture and implementation priorities — 23 October 2026
+
+- Add a maintained architecture and implementation plan against the merged
+  October baseline, separating implemented, experimental and proposed
+  capabilities from deployment, client compatibility and domain acceptance.
+- Prioritise a bounded whole-implementation review, one independently assessed
+  domain journey and current Codex/ChatGPT integration evidence, followed by
+  authoring usability, portability and optional rendering research.
+- Define accountable roles, dependencies, acceptance criteria and evidence
+  requirements. Link the plan from the README and documentation indexes.
+
+## Reliable browser package downloads — 23 October 2026
+
+- Select the primary Ubuntu and security archives over HTTPS for full-browser
+  CI and nightly assurance after repeated Azure mirror download timeouts.
+- Retain `ubuntu-latest`, signed repository configuration, the 10-minute
+  installation limit and the full Chrome, Firefox and WebKit checks.
+- Keep the isolated research prototype and its retained evidence unchanged.
+
+## Reviewed MCP service dependencies — 23 October 2026
+
+- Integrate MCP server 2.3.1, client 2.3.0, legacy SDK 1.32.0 and Hono
+  4.13.13 as one compatible service candidate, preserving the pinned node adapter.
+- Select patched ip-address 10.7.4 and retain the shared source, engine and
+  replay identities. Record the MCP licence metadata change and validate both
+  SDK clients, built service boundaries and the evidence review page.
+
+## Latest Ubuntu and governed Python recovery — 23 October 2026
+
+- Use `ubuntu-latest` across Pages, PR CI, nightly Foundry assurance and link
+  observation. Install the governed CPython 3.12.11 with uv before synchronising
+  the locked environment, avoiding the missing Ubuntu 26.04 setup-python build.
+- Check runner policy and the managed-Python installation sequence.
+  Keep exact-candidate deployment and live-browser verification gates intact.
+- Update the pinned upload/download artefact actions to 7.0.2/8.0.2 and Node
+  setup to 7.1.0, retaining the existing workflow permissions and triggers.
+
+## Reviewed Explorer dependencies and reading-help integration — 23 October 2026
+
+- Integrate the overlapping framework, PDF, browser, accessibility and
+  serialisation updates with visible occurrence help on current main.
+- Preserve security overrides, raise the conditional devalue selection to
+  5.9.4 and regenerate the lockfile-bound software inventory with pnpm 10.
+- Raise the coupled Vitest and coverage baseline to 4.1.12 for the follow-up
+  mocker advisories, including the guarded minimum and rollback controls.
+- Include visible text and counts in navigation and graph control names for
+  voice access. Keep redundant graph icon counts out of repeated speech.
+- Preserve both preceding browser receipts before running fresh acceptance
+  against the combined application candidate.
+
+## Required Foundry domain facets — 23 October 2026
+
+- Require task-based facets for every new Foundry bundle, including prototypes,
+  in the domain profile, template, warm-up prompt and build guidance.
+- Add a blocking emitted-artefact checker for complete classifications,
+  consumer declarations, count drift and exact filter membership, with input
+  digests and failure receipts. Require separate actual-Reader evidence.
+- Add positive and negative regression checks to CI. Preserve permissive OKF
+  core and existing Reader loading.
+- Pin the Explorer CI runner to Ubuntu 24.04 so the governed Python 3.12.11
+  remains available after the Ubuntu latest-image change.
+
+## Controlled-language rendering experiment — 10 October 2026
+
+- Add an isolated, optional request adapter for frozen Explorer/Ask OKF evidence, using the existing DWP disabled-child/date scenario and unchanged source provenance.
+- Retain a pinned MIT heuristic checker, three explicitly illustrative explanations, raw measurements, independent development checks and a bounded feedback replay. Keep complete semantic acceptance and human comprehension unverified.
+- Provide request preparation and response import for later trials, with exact input/output identities, mutation controls and CI reproduction. See the [findings and limits](docs/controlled-language-experiment.md).
+- Document all 14 deliverables and three research proposals in an [illustrated report](experiments/controlled-language/documentation/report.md), with 17 browser screenshots, a Word review copy, capture provenance, evaluation and sequenced next steps.
+
+## Declared semantic facets for small bundles — 4 October 2026
+
+- Let a small bundle supply explicit semantic facet labels and per-node values. Show them before source and review filters while keeping the existing learning presentation and default facets intact.
+- Keep classification with the producer and reject malformed or reserved facet keys and values.
+
+## Reading help visible on selection — 1 October 2026
+
+- Open occurrence and printed-reference help beside the passage on wide screens and in a dismissible bottom drawer on narrower or zoomed screens, without scrolling the main page after selection.
+- Keep the selected literal and exact source location clear, preserve candidate notices and empty states, and scroll long help independently beneath a visible close control.
+- Support keyboard selection, Escape, focus return, switching occurrences and direct occurrence links; test wide, narrow, zoomed and Codex-panel layouts.
+- Preserve the preceding Heritage browser receipt and results, then refresh the 100-question suite and three local journeys against the exact updated Explorer build.
+
+## Facet touch targets and explicit reference destinations — 27 September 2026
+
+- Keep the compact facet bar proportional to declared counts while moving colour selection into a folded set of full-size, keyboard-operable controls. Preserve highlighted and unknown states, every labelled value in the expanded facet, and the existing multicolour release gate.
+- Accept an optional nested, byte-bound reference target with exact destination document, passage, occurrence and leaf identity. Do not infer a destination from the printed row's own IDs or matching numbers.
+- Test a skewed distribution with nine one-record values at desktop and medium widths, including the WCAG 2.2 target-size rule, and retain the prior build-bound Heritage evidence before refresh.
+- Increase extraction-gap PDF link targets and make scrollable evidence passage text keyboard-focusable after public Reader accessibility checks.
+
+## Reading-help corpus consumer — 27 September 2026
+
+- Add a catalogue-led reading-help view that selects one document and passage, verifies bound gzip leaves and ordered continuations against exact frozen page spans, and keeps candidate explanations separate from source wording.
+- Link related body and reference-row occurrences in the existing bounded reading aid only through their shared card occurrence IDs. Preserve its v1 manifest route and source checks.
+- Let readers find source-declared paragraph labels, topics and proposed abbreviations within the selected document; expose exact but unresolved printed reference rows, candidate citation labels and browser-session fetch/cache counts.
+- Add optional, byte-bound workbench case sidecars that link exact selected record IDs to corpus passages without fetching the corpus until the reader follows the link. Register Chrome, Firefox and WebKit coverage for the new routes and keep diverted CLML responses rejected across browsers.
+- Show exact source PDF links for extraction-blocked pages and accept complete source-verified abbreviation tables within a tested 512-literal bound.
+- Bind declared sibling child descriptors to the fetched federation location, retaining local and pinned raw commits and stopping when a bound child is missing.
+- Serve nested application routes from their own inventoried files in the legislation runtime harness, reject unknown and traversal paths, and retain the failing journey phase in bounded diagnostics.
+- Match the legislation acceptance facet checks to the visible coloured bar buttons used by the current Reader, preserving the multicolour and layout thresholds.
+- Archive the preceding Heritage receipt and both browser results byte for byte, then refresh the current-build 100-question and three-journey browser evidence.
+
+## Legislation passage Reader repair — 26 September 2026
+
+- Register the focused CLML browser suite in the impacted browser test plan so Reader and source changes exercise it in CI.
+- Keep complete normalised CLML passage text, including nested numbering, table and formula wording, repeated wording and endings beyond the 2,400-character excerpt. Add a keyboard-operable control to show the full text.
+- Place dated, enacted and made versions after the selected provision in official links; prefer a safe source-native `DocumentURI` and retain source IDs, hierarchy and version markers.
+- Bound on-demand CLML download and parsing, reject redirected or credentialled requests, retain the exact source bytes and hash for download, and direct readers to the official source when a limit is reached.
+
+## Curated bounded evidence package research — 26 September 2026
+
+- Add the September BEP briefs, reports and reconstructed Research A package as
+  byte-preserved research records, with an exact curation inventory and one
+  reader index. Retain original package manifests and archival formats; omit the
+  duplicate ZIP and incidental macOS metadata. Preserve original line endings
+  in Git so imported checksum manifests remain valid after checkout. Keep original HTML in Git and
+  serve the same-stem Markdown reading pages at its Site routes.
+- Keep package Markdown outside the default OKF semantic bundle. Label the
+  reports as research proposals with unverified citation and execution limits;
+  defer Jev-Mem and the historical WebMCP task prompt.
+- Record a source-linked code audit of what the current BEP-related engine and
+  service implement, and which research schema, storage and assurance proposals
+  remain unadopted.
+
+## Occurrence-scoped reading help — 26 September 2026
+
+- Add a generic `/reading-help/` view for a separately governed manifest. It
+  verifies frozen page JSON and exact source, occurrence and support spans,
+  keeps cross-page text in labelled sections, and opens project-authored help
+  only at declared occurrences.
+- Distinguish abbreviations from adjoining source markers, retain unresolved
+  references and support local passage navigation. Keep byte identities and
+  limitations available in folded details. Add links from the Evidence
+  workbench and passage-review pages.
+
+
+## Passage-boundary Evidence workbench — 25 September 2026
+
+- Add the generic `/evidence/passages/` review route and versioned, closed
+  manifest, case and correction profiles. Reviewers can inspect hash-verified
+  PDF pages beside exact extracted text, navigate the supplied 28-case queue,
+  compare parked and successor units, and preview source-bound split, join or
+  role corrections without changing a corpus.
+- Show parser rules and hash-checked settings in folded provenance, retain
+  failed previews, and export local review records with exact input and result
+  identities. Keep preview, independent review and producer adoption separate.
+- Verify the 28-case source fixture and PDF rendering in a browser. Refresh the
+  build-bound Heritage browser receipt, preserving the preceding framework
+  receipt and results under `validation/passage-boundaries/pre-workbench/`.
+- Keep full document and corpus after-counts unknown because other units and
+  IDs are not validated in an isolated preview. Distinguish producer-supplied
+  downstream evidence from effects of an edited browser correction. Preserve
+  the preceding receipt before refreshing this build's browser evidence.
+
+## Explorer framework and bundler update — 25 September 2026
+
+- Update SvelteKit to 2.70.3, the Svelte Vite plugin to 7.3.0, Svelte to 5.57.0,
+  svelte-check to 4.7.6 and Vite to 8.3.0 as a reviewed framework set.
+- Pin transitive Rolldown and its native bindings to the reviewed 1.2.9
+  release. Keep the earlier security overrides and regenerate the dependency
+  inventory from the new lockfile.
+- Record the build and browser checks required for framework changes in the
+  dependency maintenance guide. Make the Foundry Site browser harness own its
+  server as well, so it cannot reuse an older worktree's Site.
+- Refresh the Heritage browser evidence for the updated application and bind
+  its receipt to the final assembled Site. Preserve the preceding results.
+
+## Dependency security and maintenance repairs — 25 September 2026
+
+- Update Vitest and its matching coverage package to 4.1.11, YAML to 2.9.1,
+  Playwright to 1.63.0 and axe to 4.13.0 while preserving the cookie security
+  override. Regenerate the dependency inventory from the reviewed lockfile.
+- Patch audited transitive devalue and nanoid copies to 5.9.2 and 3.3.18 with
+  conditional overrides and checks against vulnerable duplicate copies.
+- Add a deterministic dependency-policy guard and regression cases for lost
+  overrides, vulnerable copies and mismatched coverage dependencies.
+- Update the pinned pnpm setup and Pages deployment actions without changing
+  workflow permissions. Document the review, inventory and validation steps.
+- Make local browser tests own their server, with an explicit port for parallel
+  worktrees, so an older checkout cannot silently satisfy a new candidate's tests.
+- Preserve the preceding Heritage receipt and refresh its 100-question and
+  three-journey browser results against the exact repaired application build.
+
+## Remote service 0.7.0 public observation — 25 September 2026
+
+- Bind the Explorer service guides to retained DWP hosting and public SDK
+  receipts for 0.7.0. Preserve the earlier 0.6.0 observation and separate
+  delivery verification from connected-client, Voice and legal acceptance.
+
+## Passage-boundary review design — 25 September 2026
+
+- Record a versioned proposal for generic Evidence workbench passage inspection,
+  isolated correction previews and source-bound impact review. DWP's 28 known
+  historical-amendment candidates remain acceptance fixtures; no corpus, parser
+  or service behaviour changes in this design.
+
+## Remote evidence-connect admission and connection guidance — 25 September 2026
+
+- Prepare service 0.7.0 to admit the newer, immutable DWP evidence-connect
+  corpus with a compatible pinned engine and retain historical replay pairs.
+- Distinguish remote assembly, saved workbench inspection and browser-host
+  support in the connection guides. Record the successful developer-assisted
+  Edge sidebar observation without upgrading it to automatic discovery.
+- Keep deployment and public verification tied to the shared DWP receipt
+  record, separate from implementation and local test results.
+
+## Cross-repository rich-runtime reconciliation — 24 September 2026
+
+- Require the reviewed `okf-uk-government-apis` producer to declare its
+  bounded rich relationship runtime, route locator, executable schemas,
+  validation receipt and governed `uv` commands. Preserve the Wayfinder source
+  as fictional synthetic comparison material with rights not specified and no
+  default real-world runtime admission.
+- Resolve descriptor, manifest, runtime, locator and chunk references from the
+  Explorer publication root. Keep separate compatibility relationship chunks
+  outside the exact rich-runtime shard set.
+- Add a nested `bundle/` regression fixture and retain complete digest, route,
+  schema and Reader-ceiling checks in strict reconciliation.
+
+## Workbench page tools and model inspection — 24 September 2026
+
+- Record the public PR146 workbench observation separately from local checks:
+  exact application and DWP manifest hashes, qualified interaction rows,
+  blocked calculations and the unavailable native-tool gate in Chrome.
+
+- Add seven optional native WebMCP page tools over shared, bounded workbench
+  services, with snapshot-bound references, exact passage continuations,
+  cancellation and revision-checked display changes.
+- Add renderer-neutral directed graph, interaction, requirements, rates and
+  calculation-readiness views. Human controls and tool presentation share the
+  same values, source links, row-coverage notices and accessible tables.
+- Admit optional blocked model and interaction proposals without changing the
+  original retained packages. No rule execution, rate inference or award
+  calculation is provided. Document the Java/MongoDB destination separately.
+- Keep native registration, real AI-host invocation, panel rendering and
+  deployment as distinct verification claims. See the
+  [page tools guide](docs/workbench-page-tools.md).
+
+## Evidence workbench and bounded delivery — 24 September 2026
+
+- Add a reusable Evidence workbench for inspecting retained question packages,
+  source PDF locations, whole passages, concepts, relationships, dependencies and
+  selection traces. Export review proposals locally without changing sources.
+- Deliver and reconstruct canonical context packages through responses of at
+  most 32 KiB, preserving provenance, gaps and context identity independently of
+  the larger assembly budget. Verify hashes, bounds and exact continuations.
+- Add opt-in weighted discovery and bounded source-bound navigation routes;
+  prioritise the leading discovered unit's dependencies before broad expansion.
+  Preserve the existing ranking contract and frozen replay behaviour.
+- Retain the original staff question review brief separately from current
+  engine findings. Attempt a sandboxed cited-PDF preview with a direct-link
+  fallback, and expose the complete machine-readable package.
+- Keep candidate selection, useful answers, specialist acceptance and public
+  client observations as separate claims. See the [workbench guide](docs/evidence-workbench.md).
+
+## Required-path admission — 23 September 2026
+
+- Refresh the exact candidate browser receipts: 100 Heritage questions and three
+  journeys pass. Retain the preceding allocation regression and independent
+  review. The independently checked fixed-source DWP trial retains all 47
+  inherited and 181 new declared source paths, with insufficiency preserved;
+  the next source release and deployed-client checks remain separate.
+
+- Give applicable declared paths priority only as their exact next directed hop
+  is encountered from a resolved concept. Missing edges are never supplied by
+  requirements; prefix work is explicitly bounded and truncated when necessary.
+- Retain integrity-checked units with unresolved source boundaries for inspection
+  during v3 path allocation. Preserve their warnings and insufficient status.
+  Keep earlier failed comparisons and all legacy replay bytes unchanged.
+
+## Discovery and evidence allocation — 23 September 2026
+
+- Give bounded lexical discovery one fully checked source unit before graph
+  expansion, then prioritise resolved-concept paths ahead of the remaining
+  lexical candidates. Keep ranking parameters and all resource limits fixed.
+- Under v3 byte pressure, explicitly omit unused full relationship rows before
+  whole evidence. Preserve selected and declared required paths, every omitted
+  assertion and endpoint ID, exact lazy incident metadata, and missing-dependency
+  checks. Retain the failed full-corpus observation and unmodified v1/v2 replay.
+
+## Scoped context routes — 23 September 2026
+
+- Add optional conjunctive routing guards to bundle assertions. Evaluate them
+  from directly resolved public concepts before loading or following a route;
+  retain matched and unmatched reasons without treating a navigation guard as
+  legal applicability or turning evidence requirements into retrieval seeds.
+- Preserve unguarded replay and exact source metadata. Reject fabricated guard
+  diagnostics, report blocked required paths, and keep metadata refusals explicit.
+- Retain the preceding current-app receipts before refreshing the guarded
+  candidate. Correct their observation time using the actual UTC clock; source,
+  application and browser-result hashes are unchanged by that timestamp fix.
+- Record the guarded candidate's fresh local acceptance: all 100 Heritage
+  questions and all three journeys pass against the exact deterministic build.
+  Independent review and earlier failed attempts remain inspectable.
+
+## Discovery budget allocation — 23 September 2026
+
+- Prioritise real resolved-concept paths before lexical candidates spend the
+  shared corpus-reading allowance; preserve the existing limits and v1/v2 replay.
+- Replace repeated full card and incident diagnostics with exact metadata
+  references and bounded lazy readers. Keep whole evidence, provenance, matching
+  channels and unresolved obligations distinct and inspectable.
+- Retain the failed first full-corpus acceptance and stale-receipt CI run.
+  Small inline contexts can still refuse insufficient space; larger assembled
+  contexts use the existing exact-read transport without hiding that limit.
+
+## Source-bound discovery cards — 22 September 2026
+
+- Add an opt-in corpus v3 contract for separately sharded discovery cards,
+  whole-record evidence bindings and complete directed relationship inventories.
+  Cards help find passages without becoming source evidence or domain concepts.
+- Add fixed, inspectable BM25 source and discovery channels, explicit resource
+  bounds and fail-closed card, source and incident-relationship checks. Reuse
+  Reader loading and bounded exact evidence delivery; retain v1/v2 replay.
+- Document producer-wide validation, future presentation boundaries and the
+  separate source, semantic, client and answer-quality acceptance gates. No
+  remote service defaults, approved sources or historical engines are changed.
+
+## Compact logical-context delivery — 22 September 2026
+
+- Add bounded browser WebMCP catalogue and exact-evidence reads using the existing lossless delivery helpers. Preserve the full assembly budget, package identity, source spans and explicit gaps across paginated responses.
+- Group repeated item-local diagnostics in logical-unit v2 corpora without dropping affected IDs or combining dependency pairs. Preserve the v1 page-corpus representation and frozen receipts.
+- Add strict input, cancellation, reconstruction and browser/UI parity controls. Remote-service admission, default versions and specialist answerability remain separate.
+- Preserve earlier study-club and Heritage receipts, then refresh the current
+  local candidate against the exact app: 100 Heritage questions and three
+  journeys pass. Publication still requires the merged CI and live identity gates.
+
+- Retain a separate compact-delivery observation for the later DWP semantic candidate: exact 32 KiB responses preserve the selected 512 KiB packages, while all five 32 KiB inline cases still lack source evidence and all contexts remain insufficient.
+
+## Learning-path review and large-bundle teaching — 22 September 2026
+
+- Add DWP learning paths to the home catalogue and Reader bundle selector, with explicit evidence and training limitations.
+
+- Add opt-in assessed large-bundle programmes with source-record links, prerequisite checks, local journals and signed facilitator decisions. Keep practice ticks separate from assessed passes and bind decisions to the learner, programme and bundle snapshot.
+
+- Integrate the draft small-bundle learning presentation with current main.
+- Gate conceptual facets on the declared learning presentation.
+- Add optional ordered learning paths to large descriptors, with outcomes,
+  practice prompts, time estimates and reversible progress for the loaded session.
+- Keep record and evidence inspection on existing Reader routes and loading paths.
+  Preserve legacy bundles and document producer bounds and acceptance limits.
+
+## Service 0.6.1 client question compatibility — 21 September 2026
+
+- Make the shared non-blank question pattern compatible with clients that match
+  the whole string. Preserve the accepted questions, 2,000-character limit,
+  read-only tools, source versions and evidence engines. Add regressions for
+  ordinary, multiline and Unicode questions across all three tools.
+- Explain how to refresh an installed connection and establish tool access in
+  each new AI session. Keep missing tools, connector validation, public MCP
+  delivery and model answer quality as separate observed outcomes. Distinguish
+  the connection smoke test from the fixed staff benchmark.
+- Check historical 0.6.0 receipts against their retained build and runner;
+  preserve every archived observation when the current Worker changes.
+
+## Recorded service publication and documentation consistency — 21 September 2026
+
+- Correct the remote guide and service README to reflect the retained 0.6.0 public deployment and SDK observation. Keep source, runtime, engine and verifier identities separate.
+- Derive the three dated status blocks from immutable DWP receipts and check them in pull-request and Pages gates. The shared DWP publication page is the reference for later recorded deployments; a dated observation is not a live health check.
+- Preserve frozen candidate records, failed observations and earlier browser results. Public delivery does not establish Data agent, ChatGPT Voice, legal or answer-quality acceptance.
+
+## Service 0.6.0 preparation — 21 September 2026
+
+- Prepare Ask OKF service 0.6.0 with the final partner/household
+  qualification corpus. Retain all four historical sources and their exact
+  replay paths; admit the new source only with the current assembler.
+  Verify ten local cases, including 512 KiB care-home and empty-control packages,
+  without promoting missing evidence, legal review or model acceptance.
+  Extend the separate bounded live verifier to both exact public questions;
+  preserve all earlier public observations.
+
+- Add versioned evidence replay. Bind new review links
+  to approved source and assembler identities; check older links against a
+  bounded compatible set and return only the complete matching package. Keep
+  unknown original assembler identity explicit, preserve full-package output,
+  and expose replay provenance alongside compact delivery. Retain local tests,
+  eight source/assembler integration cases and browser observations separately
+  from the earlier 0.5.0 deployment.
+  The later 0.6.0 public observation is recorded above.
+
+## SDK discovery verification — 21 September 2026
+
+- Compare complete tool definitions across MCP SDK versions while validating their distinct server/cache envelopes. Preserve exact schemas, read-only annotations and trust metadata.
+- Retain bounded stage diagnostics for failed verification. Fifteen controls include both real SDKs against the local service; the public failed attempt remains recorded separately. Runtime and deployed Worker bytes are unchanged.
+
+## Preserved evidence navigation — 21 September 2026
+
+- Add a static history landing page after the publication audit found a directory link without an index. Preserve all frozen observation, classification and inventory bytes; this is a separately labelled navigation addition.
+
+### Additional v0.8.0 changes
+
+- Open learning-hub guides with normal browser navigation so static documents do
+  not first fail as application routes. The DWP Try link now reaches a beginner
+  launch guide for the actual learning programme, with its evidence and assessment
+  limits, rather than the separate guide for programme designers.
+
+- Add optional logical evidence units with exact source spans and explicit
+  boundary uncertainty. Corpus v2 separates physical page and retrieval-unit
+  counts and loads bounded declared destinations beyond lexical candidates.
+  Preserve whole-unit qualifications, source provenance, read-only delivery,
+  corpus v1 package identity and frozen service engines. Add integrity, budget,
+  ambiguity and compatibility controls; expose spans in Ask OKF. Retain exact
+  compressed v1 replay inputs so platform-specific gzip output cannot alter
+  the historical comparison.
+
+- Share English question-scaffolding classification between corpus discovery
+  and unresolved-term diagnostics. Preserve declared aliases, ambiguity,
+  meaningful qualifications and identifiers; remove misleading missing-concept
+  reports for pronouns and broad request wording. Add cross-domain regressions
+  while preserving frozen service engines and historical context packages.
+  Refresh the generated study-club execution and local Heritage browser
+  evidence against the new application build, using actual evaluations rather
+  than rebinding earlier passes. Document these separate evidence lifecycles.
+
+- Add an offline exporter and small static reader for explicitly approved,
+  fixed evidence examples. Preserve canonical packages and source/engine
+  declarations; expose bounded, hash-checked records, provenance, gaps and
+  directed relationships without storing anonymous questions or changing the
+  live service. Add eleven offline controls to the context-assembly CI gate
+  and publication contract. Retain a local Chrome journey with seven focused
+  checks and its earlier failures; public publication remains a separate gate.
+
+- Give valid, bundle-declared evidence paths priority when node, relationship or
+  byte limits would otherwise omit them. Use at most one additional allocation
+  pass from the original resolved seeds, retain whole passages and explain the
+  priority without changing source authority. Keep missing paths and truncation
+  explicit when the required evidence still cannot fit.
+- Report a retained source's declared dependencies even after supporting edges
+  are trimmed. This corrects a diagnostic gap and changes affected context
+  identities; historical packages and model trials remain unchanged.
+- Show each large-corpus record's declared type in the detail badge before and
+  after loading its full record. Use collection vocabulary only as a fallback,
+  so mixed corpora do not label every item as the same kind of document.
+- Retain a separate local service integration observation for the changed
+  engine: four approved source versions and four compact cases pass. Record
+  changed corpus context identifiers explicitly and preserve the earlier 0.5.0
+  receipts. A fixed source version alone does not freeze a future engine's
+  assembled package.
+- Re-execute all 100 Heritage questions and three browser journeys against the
+  revised application, retaining exact build identities and fresh results.
+
+- Document the published Ask OKF service 0.5.0, its household/statutory default
+  and all four explicitly selectable source revisions in the top-level guide.
+  Record seven actual full-context and four compact SDK passes, three functional
+  browser passes and the retained Firefox hosting-cookie warnings. Keep evidence
+  delivery, legal completeness and AI answer quality separate.
+- Restore publication documentation lockstep after the service-only PR updated
+  its nested guide and changelog without the contract-required top-level entries.
+  Preserve the failed Pages run; this documentation correction changes no engine
+  or service runtime bytes. Check lockstep before impact-based job selection so
+  service-only pull requests cannot skip this publication requirement.
+
+- Keep ambiguous Ask OKF meanings inspectable as separately labelled evidence
+  branches without resolving them or activating their evidence requirements.
+  Preserve bounded paths through shared junctions and expose path-limit omissions.
+- Load up to four hash-bound corpus files concurrently with deterministic budget
+  reservations and unchanged aggregate limits. Retain exact source and ranking
+  checks; increase only the semantic/base-index ceiling to an explicit 8 MiB.
+  Package, manifest, posting and record-shard limits remain unchanged.
+- Replay synthetic context, three-version remote integration and exact-build
+  Heritage acceptance after the engine change: all 100 questions and three
+  fixture journeys pass. Document the older corpus context-identity change;
+  mismatched historical replay recipes continue to fail closed.
+
+- Serve the additive DWP staff-semantic corpus by default in Ask OKF service
+  0.4.0, retaining both earlier approved corpus versions and exact replay links.
+  Verify the real three-version loader and compact delivery against hash-bound
+  source files. Keep current staff profiles insufficient with named obligations.
+- Request `no-transform` for service HTML while preserving Content Security
+  Policy and `no-store`; verify actual host behaviour separately. Align the
+  service architecture, README, changelog and reproduction commands.
+
+- Count missing-evidence explanations while trimming Ask OKF packages to their
+  byte budget. Retain whole evidence records when they fit, rather than falling
+  back to an empty package after adding final diagnostics. Add generic boundary
+  regressions; keep genuine metadata-only budget failures explicit.
+  Replay the non-DWP acceptance receipt against the updated engine hash;
+  its evidence package and context identifier remain unchanged.
+
+- Include the bounded, transitive Markdown reading closure in the documentation
+  cache identity, so changes to linked service guides and changelogs rebuild
+  their rendered pages and exact-source alternates. Keep unrelated service
+  sources outside that cache dependency.
+
+- Correct a stale replay link in Ask OKF service 0.3.1: changing the question or
+  source version, or starting another replay, removes the old link. Browser
+  regression checks that a newly requested link matches the new context.
+  Preserve 0.3.0 deployment evidence and verify the corrected runtime separately.
+
+- Extend conceptual-navigation acceptance with an optional published-bundle
+  journey. Check real network responses against pinned local files and verify
+  the deployed application manifest, while retaining the offline fixture mode.
+
+- Keep browser observations of an external Ask OKF service in a separately
+  selectable output directory. Receipts distinguish the tested target from the
+  local build reference and leave deployment identity to its own receipt.
+
+- Refresh exact-build acceptance for the navigation candidate: 100 Heritage
+  questions and three local journeys passed. Add separate service-browser CI
+  coverage and full-corpus conceptual-filter browser checks. An actual DWP
+  check exposed a producer topic-field mismatch, corrected in the additive
+  producer projection; the regression now compares hydrated record counts.
+
+
+- Preserve exact Markdown alternates when newly linked reading pages come from
+  outside the ordinary copied documentation directories, including the changelog
+  and remote-service guides. Validate those links in the assembled site.
+
+
+- Add bounded, lossless evidence catalogues and read-only evidence slices to the
+  remote Ask OKF service, preserving full-package output and context identity.
+  Add a stateless browser evidence reader, explicit delivery limits and replay
+  tests. These changes are a version 0.3.0 candidate; hosted and AI-client
+  observations are separate from implementation checks.
+
+
+- Show producer facet descriptions and optional conceptual-classification
+  methods, review status and whole-snapshot coverage. Preserve ordinary facet
+  filtering across Graph and Timeline without turning text mentions into
+  applicability relationships. Add explicit source, inferred and audit date
+  roles, source-only Timeline selection and partial-date groups that never
+  invent a month. Keep a visible Explorer changes link in the header.
+
+- Verify the deployed full-source HTTPS service with the official MCP SDK:
+  complete imprisonment and hospital packages match the shared core, and the
+  explicit historical imprisonment package remains unchanged. A separate raw
+  HTTP client verifies exact package equality for 40 staff questions and three
+  controls, all correctly insufficient. Keep subsequent ChatGPT observations
+  and Explorer Pages publication as separate acceptance records. Fix the confirmed
+  Worker redirect incompatibility using manual handling that rejects every 3xx
+  response without following it.
+
+- Remove personal pronouns and broad forms of “go” and “get” from full-source
+  question ranking after a real ChatGPT call exposed conversational-word noise.
+  Retain substantive evidence terms and verify the correction with non-DWP
+  fixtures and a separate full staff-question run; no answer rules are added.
+
+- Record fixed failure stages for remote evidence assembly without logging
+  questions, source URLs or exception text. Refresh exact-app Heritage and
+  non-DWP regression receipts after the corpus extension; preserve their source
+  snapshots and existing context results.
+
+- Extend the remote MCP service to an approved immutable full DMG and ADM
+  corpus, retain the original profile by version and cache only verified public
+  source files. Add an accessible landing page with beginner guidance and clear
+  source coverage, protocol and answerability boundaries.
+
+- Add hash-bound full-source lexical discovery to Ask OKF, with explicit page,
+  query, transfer and package limits. Preserve source governance, scoped graph
+  traversal and the historical narrow-index adapter; never treat lexical
+  matches as a complete answer. Share the corpus reader across UI and tools.
+- Fix silently omitted large-graph relationships, inactive stack expansion and
+  Links overview assumptions about record identifiers. Add bounded paging,
+  counts and cross-browser regressions.
+
+- Add an independent read-only remote MCP adapter for the existing Ask OKF
+  engine, with approved immutable source bindings, bounded requests and the
+  unchanged governed evidence package. Document ChatGPT setup, host boundaries,
+  privacy, threats and separate deployment/client acceptance.
+- Keep the remote adapter's locked tests and build in a required CI job. Route
+  service-only changes independently from unchanged Heritage browser artefacts,
+  while preserving unknown-path failure controls and frozen profile contracts.
+- Deploy the public HTTPS test service and verify complete package equality with
+  two protocol clients. Record actual ChatGPT calls and distinguish its runner's
+  output limit from the assembler's explicit evidence budget. Retain smaller
+  package demonstrations and limitations without changing the shared engine.
+
+- Reject invalid optional review status, original assertion identities and extra alias fields before context assembly or rendering.
+
+- Make context-control replay portable across zlib builds while retaining exact
+  archive digests, bounded decompression and byte-for-byte fresh content checks.
+  Reject archive tampering, changed content and oversized evidence.
+
+- Add a transport-independent governed context assembler and additive producer,
+  package and evaluation-case contracts. Keep Search and the earlier lexical
+  MCP context pack separate. Check declared phrases, directed dependencies,
+  whole evidence, provenance and explicit gaps within bounded packages; do not
+  generate model answers or infer domain rules from hyperlinks.
+- Add independent A–H package evaluation, exact identity and path controls,
+  portable execution receipts and synthetic negative cases. Preserve earlier
+  research trials and distinguish optional tool registration from observed AI
+  host invocation.
+- Execute the generic engine's synthetic controls, independent assessor
+  controls and non-DWP retained case in a required context CI job. Check exact
+  source URL and capture-time expectations alongside hashes and directed paths.
+- Keep the standalone study-club context case under `tests/fixtures`, preserving
+  its exact inputs and execution evidence without claiming a complete
+  Evaluation Foundry fixture family.
+
+- Restored indexed Timeline when opened directly on a selected record or after
+  targeted Graph loading, retaining the browser memory limit and bounded graph
+  requests. Recognised explicit operational source release dates separately
+  from catalogue timestamp fallbacks, preserving month and year precision.
+  Refreshed the exact-build Heritage evidence with 100 passing questions and
+  three passing local journeys, retaining the original source snapshots.
+
+- Labelled small-bundle Timeline dates by their provenance. A described source's
+  declared publication or issue date takes precedence, with month and year
+  precision preserved. Record publication, capture, observation, generation and
+  legacy timestamps remain separately labelled instead of implying publication.
+  Refreshed the exact-build Heritage runtime evidence: all 100 questions met the
+  required score and all three local journeys passed against the new app, with
+  the original source snapshots preserved. Documented the evidence refresh.
+
+- Reorganised onboarding into linked task guides for trying AI, choosing examples,
+  audience journeys and a complete fictional first bundle. Shortened the README,
+  separated development/reference material and reconciled current interaction
+  instructions. Added one generated learning catalogue with a frozen external
+  government WebMCP entry, explicit AI-access limits and deterministic starter
+  files, question checks and download. Production gates and historical anchors
+  remain preserved. Linked Chris Page’s recorded AI/WebMCP demonstration from
+  the README and access guide, with a watch-and-try exercise that distinguishes
+  the recording from host compatibility and the separate human browser check.
+
+- Preserved panel focus across Chrome's native blur during responsive resizing,
+  while leaving an explicitly focused visible control undisturbed.
+
+- Preserved the byte-frozen Heritage evaluation profiles while classifying the
+  four current repository journey manifests through their existing control rule.
+  Corrected impact planning to validate both artefact and semantic identities in
+  version 2 plane receipts, retaining fail-closed handling of malformed roots.
+
+- Added a paired Search and Details layout for medium screens, compact inline
+  footer controls and a Results tab for small-bundle navigation. Collapsed paired
+  selection actions into an explicit disclosure, aligned tab/control heights and
+  reduced oversized detail headings. Kept facet selection summaries within a
+  stable header so double-click targets do not move. Colour segments
+  now toggle values while keeping facets folded; a second ordinary click removes
+  a selection. Double-click keeps the original multi-value selection.
+- Restored the required geospatial index when opening a Reader URL with a map
+  restriction, including browser history restoration, and retained loading state
+  until that scope is available.
+
+- Opened each new bundle with all facets folded and Title as the browsing default,
+  preserving explicit URL sorting. Replaced facet bars with alternating luminance
+  colours and a separate black-on-white highlight track, labelled counts and
+  selection ticks, with measured adjacent-colour contrast tests.
+
+- Preserved the full-index fallback for older search bundles when no highlight
+  or keep selection is active. Section facets now use the same declared section
+  as the record inspector. Added regression coverage for both behaviours and
+  clarified the information included in shared URLs and exported pins.
+
+- Harmonised Explorer selection around SeeLinks: highlight-first previews,
+  OR within a facet, AND across facets, reversible keep/remove operations and
+  presentation folds with live counts. Added shared cards and lists, a mobile
+  three-panel workspace with footer and swipe navigation, keyboard splitters,
+  bundle-qualified bookmarks and tabbed small-bundle provenance. Extracted the
+  interaction algebra, panel shell, facets, results, bookmark shelf and small
+  record inspector into independently reviewable modules. Local rehearsal
+  evidence and remaining browser gates are recorded in
+  [the implementation note](docs/explorer-interaction-implementation.md).
+
+- Started the estate-wide OKF build and publication standardisation programme.
+  Added a separate publication-method v1 profile, an executable repository
+  contract, contract-driven documentation and changelog lockstep, a fail-closed
+  dependency planner, a 17-entry operational estate registry with an accessible
+  generated view, safe workbook-folder controls and a live adoption tracker.
+  The semantic bundle registry now validates every bundle against its frozen
+  schema, while ordinary Explorer and future heritage CI use runner Chrome and
+  reserve bounded Firefox/WebKit installation for cross-engine assurance.
+  Pages now binds the assembled candidate to its exact commit and governance
+  bytes, then verifies the deployed estate-registry journey in installed Chrome
+  without rebuilding the candidate.
+- Recorded the estate adoption wave in the lockstep tracker and hash-bound
+  every publication contract to its reviewed commit. All 11 applicable
+  producers are adopted: Explorer, AI Infrastructure, UK Government APIs,
+  GOV.UK Content, ONS, UK Living, ELS, Planning, WCC, Land Registry and
+  legislation. Land's focused routing
+  [PR #8](https://github.com/chris-page-gov/okf-LandRegistry/pull/8) passed its
+  exact-main immutable-maintenance path; legislation passed hosted validation,
+  exact-main Pages deployment and six byte-identical HTTP route checks. Six
+  reviewed fixtures, immutable publication units, compatibility surfaces and
+  upstream references have justified non-applicable decisions. The WCC
+  workbook case proves that an unadmitted
+  `.xlsx` change can select four content-free inventory and documentation gates
+  without a semantic or release rebuild. It also replaced a brittle Playwright
+  cache-path link with the supported installed-Chrome channel.
+- Corrected the generated estate-registry page after its first exact-commit
+  Chrome run proved the identity and route bytes but exposed an origin-root
+  favicon 404 through the clean-console gate. The page now links its
+  project-relative SVG icon and verifier diagnostics include the resource URL
+  and location. The final registry binds audited correction `6060d4a2`, with
+  11 applicable repositories adopted and six reviewed units non-applicable.
+  The correction needs one affected Site build, not a semantic bundle, corpus
+  or release rebuild.
+- Rebound the heritage local-candidate receipt to the exact deterministic
+  Explorer build changed by the learner registry correction. A genuine Chrome
+  run passed all 100 questions and all three local journeys; the corpus,
+  semantic bundle and released external heritage publication remain unchanged.
+- Added a no-code walkthrough of the immutable AI Infrastructure OKF v0.6.0
+  knowledge graph. It starts with browser-only GitHub and Explorer routes,
+  explains the optional Obsidian download, follows one Markdown relationship
+  into its direct and reified semantic representations, and distinguishes the
+  roles and limits of YAML-LD, JSON-LD, validation, release receipts and MCP
+  retrieval.
+- Avoided the GitHub-hosted runner's unreliable Ubuntu package mirror for
+  Chromium contract tests by using its installed Chrome channel. The less
+  frequent Firefox and WebKit dependency installation now has a bounded timeout.
+- Replaced the learner-hub header's unscoped Explorer launch with an exact,
+  source-backed three-record Heritage worked example opening the Coventry
+  Cathedral record. On narrow screens, large-corpus navigation now starts
+  collapsed so the selected evidence appears before optional facet controls.
+- Published the evidence-backed OKF evolution review, including its chronology,
+  bundle inventory, standards decision ledger, conversation evidence register,
+  current best practice, grounding analysis and bounded MCP retrieval prototype.
+  The generated OKF bundle now contains 165 nodes and 588 semantic assertions.
+- Replaced the Pages root with a static learner-first project studio for an
+  18-year-old non-specialist, while preserving the complete interactive
+  Explorer at `/explore/` and retaining legacy deep-link behaviour. Added an
+  eight-stage independent-learning pathway, governed bundle catalogue,
+  cross-bundle personas and user stories, project templates, accessibility
+  checks and three-engine browser journeys.
+- Expanded the beginner learning path with a practical data-to-ontology
+  on-ramp, route-based study plans, foundational definitions, an annotated
+  authoritative-source register and reconciled geospatial and glossary
+  material. Standardised the affected documentation on British English with
+  context-aware guidance and checks that preserve exact code, schema, URL and
+  official-title spellings.
+- Added stable visible permalinks to beginner headings while preserving
+  established fragment identifiers. Direct fragment loads, refresh and browser
+  history now focus and visibly highlight the selected section without
+  replacing the existing accessible collapsible and pinned learning-path
+  sidebar.
+- Added a deterministic SharePoint Word-record experiment for all 293 governed
+  `okf-uk-living` service families, with a frozen synthetic evaluation schedule,
+  exact provenance and citation gates, append-only continuation controls and an
+  explicit ignored boundary for tenant-specific transcripts and attempt
+  evidence. The completed Microsoft 365 Copilot development run kept all 293
+  family responses inside the safety boundary and selected the exact expected
+  family in 292 cases. The public report preserves the one Universal Credit
+  near-neighbour exception, distinguishes service protection from semantic
+  failure, estimates the counterfactual pay-as-you-go charge and states that an
+  independent holdout and the OneNote condition remain outstanding.
+- Reconciled the external-source inspection research with the implemented
+  typed `source_access` contract. The guidance now separates today's bounded
+  `link`, `json`, `xml` and `text` display modes from future multiple-
+  representation selection, format-specific renderers, clearer transport and
+  parse diagnostics, and their required regressions.
+- Added a fail-closed `okf-uk-living` reconciliation gate for the complete rich
+  relationship runtime, route locator and four executable Draft 2020-12
+  schemas. The audit validates every projected assertion and route commitment,
+  applies the Reader's aggregate loading ceilings, and requires an explicit
+  reviewed preset when a producer is audited from a renamed worktree.
+
+## v0.7.0 - 2026-08-12 - Explore OKF authoring and review
+
+- Reviewed the reusable OKF authoring methodology against the completed Land
+  Registry retrospective and public graph evidence without reopening that
+  producer. Added versioned Authoring Profile v1 controls for readable labels,
+  compact graph endpoint indexes, denominator-based useful semantic linking
+  and an explicitly non-release Explore OKF feedback stage.
+- Made semantic-link coverage identity-bound and fail-closed: declared
+  candidate inventories reconcile exactly across outcomes, assertions and
+  dereference receipts; mapping strength agrees with its predicate; targets
+  remain inside governed URI namespaces without encoded-delimiter bypasses;
+  duplicate assertions cannot inflate coverage; and approved observations
+  require one approval-grade receipt carrying the canonical complete-result
+  digest and exact observation time. The guidance explicitly separates this
+  mechanical guarantee from
+  the domain review needed to judge whether an eligibility rule omitted an
+  entity.
+- Added the strict, versioned Explore OKF producer contract, JSON Schemas,
+  examples and Python build/validation tooling for snapshot-bound endpoint
+  labels and exploratory-publication metadata.
+- Added Explorer consumption of integrity-bound endpoint labels across
+  route-based views. Opaque generated identifiers now appear as a visible
+  **Missing label** quality defect while the route, IRI, type and label
+  authority remain inspectable. Source-native record routes and selected
+  relationships now survive copied links, reload and browser history.
+- Added a persistent exploratory-publication banner, route- and filter-
+  preserving feedback links, explicit invalid-contract warnings and fail-safe
+  `noindex` behaviour across all Explorer views.
+- Fixed the beginner learning-path panel so its final chapter remains reachable
+  by scrolling the panel independently of the article. After chapter
+  selection, the panel can collapse to a narrow current-chapter rail, expands
+  on hover or keyboard focus, and provides an accessible persistent pin. Deep
+  section fragments now restore the exact article position after reload in
+  Chrome, Firefox and WebKit.
+- Updated both copy-ready Foundry prompts, the bundle-authoring guide and the
+  beginner explanation, and researched a bounded Coventry everyday-services
+  open-data pilot to test the method before reviewing `okf-uk-living`.
+- Replaced host-dependent Python and repeated unpinned `pip` installation with
+  a committed `uv.lock`, CPython 3.12.11 pin and `uv` 0.12.2 requirement.
+  Local guidance and all root workflows now use one locked invocation path,
+  with a reusable commit-pinned CI setup action and regression enforcement.
+- Kept `requirements-okf.txt` only as the byte-preserved legacy compatibility
+  requirements manifest required by the current digest-bound Heritage
+  publication-unit contract; its separately versioned host-Python workflow
+  does not lock transitive dependencies, while Explorer development and CI no
+  longer install from it. Preserved the exact released Heritage
+  evaluation-profile bytes while preventing current root workflows and the
+  Foundry browser server from using a host interpreter.
+- Preserved hidden publication files in the unchanged GitHub Pages artefact,
+  including `.nojekyll`, and added a workflow regression assertion. This keeps
+  the downloaded release artefact's complete Site tree identical to its
+  candidate receipt rather than silently omitting one governed file.
+- Separated the editable bundle-URL draft from the committed loaded-source URL
+  so an initial asynchronous load cannot overwrite a person's newly typed URL
+  or leak unsubmitted text into copied routes and feedback links. Delayed
+  registry start-up and slow local-file reads also cannot supersede a later
+  explicit load or clear its loading state. Accepted remote and local
+  descriptor identities are bound before a later validation or subordinate-
+  hydration failure can expose feedback, so that feedback names the descriptor
+  actually under review. Added deterministic delayed-registry, delayed-bundle
+  and delayed-file browser regressions with exact failure-identity assertions.
+  Refreshed the exact-app Heritage consumer evidence and corrected its receipt
+  generator to use British-English publication wording.
+
+## v0.6.3 - 2026-08-12 - Accurate large-corpus overview counts
+
+- Corrected the unloaded large-corpus overview metric to prefer the declared
+  record count over the dataset-grouping count. This prevents 14 Land Registry
+  dataset groupings from being labelled as 14 discovery records when the
+  bundle declares 2,203 records.
+- Preserved compatibility with older bundles that publish only a dataset count
+  and added cross-browser regression coverage for bundles whose record and
+  dataset-grouping counts differ.
+
+## v0.6.2 - 2026-08-11 - Bounded producer search policy
+
+- Added an exact, opt-in `okf-static-search.v2` query policy so a producer can
+  declare its component tokeniser, bounded stopwords and integer-rational
+  minimum-should-match rule. Manifests without the extension keep strict AND;
+  declared policies count unresolved tokens as unmatched, require the stated
+  number of distinct token groups and expose the deterministic decision in the
+  worker response.
+- Added `wait_for_ranked_result` and `ranked_result` to external bundle
+  journeys. Both bind a result by its credential-free canonical URL, wait for
+  the exact URL query to reach Explorer's settled marker and fail immediately
+  when the settled result is absent, while genuine loading retains the bounded
+  90-second journey ceiling.
+- Covered policy compatibility across strict-AND producers, entity aliases,
+  embedded entity prose, typo tolerance, capped query bounds and malformed
+  contracts. Added real-browser acceptance tests for delayed settlement and
+  prompt settled-empty failure.
+
+## v0.6.1 - 2026-08-11 - Governed runtime evidence
+
+- Added bounded, declarative capture of ordered DOM attributes to external
+  bundle journeys. Producers can now place the Explorer's actual ranked
+  canonical result URLs in the digest-bound browser receipt, allowing release
+  evaluation to calculate retrieval and forbidden-result metrics from the
+  rendered product rather than from a separate lexical approximation.
+- Extended governed entity recognition to unambiguous organisation names
+  embedded in natural-language questions, while keeping residual subject terms
+  as required lexical constraints. Corrected count-only and entity-filtered
+  result totals so capped postings are reported as lower bounds or unknown,
+  rather than as exact counts.
+- Made Explorer acceptance commands checkout-scoped single writers. A second
+  invocation fails before deterministic build output, Chromium or receipt
+  creation; inner runners reject direct invocation, bind the receipt to the
+  exact wrapper and lock-module bytes, and verify their live parent-owned lock.
+  POSIX process groups are terminated and verified before release; an
+  unverifiable descendant deliberately leaves the lock in place.
+- Made external runtime input immutable for the browser run by copying the
+  bundle and Explorer build into independent private snapshots, serving only
+  those copies and rechecking the source trees afterwards. Added aggregate
+  manifest, telemetry and receipt limits, strict readiness selectors, atomic
+  ranked-row capture and fail-closed credential-free canonical URL checks.
+- Preserved an optional non-empty `review_status` on every governed rich
+  relationship assertion while continuing to require it for model-derived
+  assertions. Normalised producer review state is therefore available to the
+  Reader instead of being silently discarded.
+- Added Predicate Registry v2 as an additive, integrity-locked profile. Its
+  bounded schema derives exact `active-emitted` and
+  `authorised-zero-evidence` states from the complete relationship set, binds
+  the whole registry rather than only its predicate rows, and leaves the
+  frozen Bundle Wiki v1 profile byte-identical.
+- Closed the Heritage Foundry producer-provenance boundary by including the
+  shared semantic module in both impact profiles and binding every declared
+  producer input into a sorted, exact-byte `producer_materials` root in the
+  candidate receipt. Python generation and JavaScript evaluation enforce the
+  same limits and digest rules.
+- Strengthened the legislation runtime gate with exact candidate and Explorer
+  Git identities, immutable bundle and application snapshots, write-once
+  evidence publication, aggregate resource ceilings and a fail-closed
+  diagnostic mode. Release evidence now binds the completed deterministic build
+  and all executable acceptance material before and after the browser journeys.
+- Archived the byte-preserved 26 July v1 runtime receipt as historical evidence
+  instead of presenting its legacy `passed` field as current authority. The
+  canonical path is populated only by the clean-commit, annotated-tag and
+  exact-candidate v2 release gate.
+- Governed selective CPSV-AP 3.2.0 adoption across the OKF producer portfolio,
+  preserving DCAT/DCAT-AP, ELI and statistical-model boundaries while
+  requiring pinned standards assets, evidence-bearing mappings and honest
+  subset-validation claims.
+- Pinned the canonical Bundle Wiki v1 profile to the complete, byte-exact
+  Explorer v0.6.0 16-file tree and an adjacent machine-readable vendor lock.
+  Reconciliation now fails closed on a missing, extra or drifted canonical
+  mirror, checks every declared relationship schema, and offers an explicit
+  symlink-safe profile sync with opt-in replacement of divergent files.
+
+## v0.6.0 - 2026-08-10 - OKF 0.2 semantic contracts and governed YAML-LD
+
+- Completed the local nine-repository OKF 0.2/YAML-LD migration: every
+  reviewed `okf-*` repository now declares one machine-readable semantic
+  contract, absolute semantic identities plus safe local routes, synchronised
+  direct and reified assertions, deterministic runtime projections and exact
+  setup/build/check guidance. Added positive, negative and compatibility
+  fixtures; shared-schema sampling to the cross-repository auditor; compact
+  digest-bound semantic shards for large graphs; and a bounded rich-runtime
+  Reader path with lifecycle-separated planes, SHA-256 route locators and
+  per-plane incident assertion commitments. This release commits the Explorer
+  contract, plugin and Explorer-owned migration as v0.6.0. The remaining
+  producer migrations are independent working-tree changes and are not claimed
+  here as committed, released, deployed or publicly verified.
+- Closed the independent cross-layer review findings before declaring local
+  completion. The shared assertion schema now requires preferred labels and
+  canonical credential-free HTTP(S) authority/evidence/rights sources; every
+  pinning producer validates its complete population against the exact shared
+  bytes. Explicit YAML-LD graphs now fail closed on missing, duplicate, unsafe
+  or inconsistent routes and incomplete assertions instead of deriving routes
+  from IRIs. The portable contract auditor validates the complete contract
+  shape. The older heritage-corpus producer now propagates the preferred label
+  into every reified assertion too, so tightening the shared schema does not
+  leave a second Explorer-owned generator behind. Rich route hydration now
+  takes priority independently of record
+  locators, decodes shards sequentially, drops undeclared row properties and
+  enforces aggregate compressed-byte, retained-text, evidence and supporting-
+  assertion ceilings in addition to its existing row/chunk bounds.
+- Hardened the portable contract and plugin review boundary: declared paths and
+  globs must stay repository-relative and contained—including authoritative
+  inputs and symlinked prefixes—and glob expansion has an explicit match-count
+  ceiling. Tooling strings remain untrusted declarations until reviewed against
+  trusted guidance, and sampled plain/gzip artefacts are read under explicit
+  on-disk and decoded-byte limits. Malformed relationship, semantic or runtime
+  JSON now fails the audit instead of disappearing as an empty sample or
+  aborting reconciliation, and the shared assertion schema uses the same
+  whitespace-free RFC-style IRI rule as the reconciler and Reader.
+- Completed the Explorer repository's own OKF 0.2 semantic migration. The
+  Markdown graph now deterministically emits `okf-bundle.yamlld`,
+  `okf-bundle.jsonld` and a compatibility runtime bundle from one normalised
+  source. Its 579 directed Markdown links are represented conservatively as
+  evidence-bearing `dcterms:references` assertions with absolute identities,
+  suffix-free semantic routes, direct triples, reified assertion nodes,
+  provenance and rights; section placement is not promoted into an invented
+  domain predicate. Site assembly verifies and publishes both semantic
+  representations alongside the runtime projection.
+- Added an additive large-record contract for repository-authored Narrative
+  Markdown, enclosing-process context, previous/next steps, variants and
+  related routes. A selected record now uses this content instead of the
+  generic reduced-corpus narrative when the producer supplies it.
+- Added typed resource source access with `link`, `json`, `xml` and `text`
+  display modes. Explorer fetches only explicitly browser-readable JSON, XML
+  and text, renders XML/text as inert escaped content, retains
+  `source_api_url` as JSON-only compatibility behaviour and always preserves a
+  direct official-source link. No response is persisted or redistributed.
+- Standardised authored release pages, semantic profiles, CI labels, plugin
+  guidance and visible Explorer copy on British English and GOV.UK plain
+  English conventions. Repository and generated producer-agent guidance now
+  preserves exact schema values, identifiers, official titles and upstream
+  product terminology where localisation would be incorrect or incompatible.
+- Made focused-graph navigation explicit and reversible: Graph actions now
+  recentre the inspected record, preserve the prior focus in the URL, reset
+  the viewport and let browser Back restore the previous focus and inspector.
+  Bounded focus graphs enter the established ordered relationship regions at
+  four relationships rather than falling back to an unstructured radial view.
+- Clarified the large-corpus facet controls as `Clear filters` and `Reset facet
+  layout`, grouped them together with Guidance, and kept the compact bundle
+  loader beside the Explorer title at tablet widths.
+- Tightened graph pointer targets so an icon no longer owns the empty span to
+  its label or overlaps another node. List labels now sit inline on their
+  outside edge, staircase labels prefer the available left/right width, and
+  each visible label retains its own exact clickable target.
+- Labelled single record-type stacks as `All matching …`, distinguishing a
+  bounded loaded subset from the full match count. Opening a large stack now
+  always produces semantic subgroups, with deterministic title bands/ranges as
+  the fallback, instead of fanning out as many as 72 individual records. Each
+  subgroup can be opened again, and every open/close step is URL-backed so
+  browser Back restores the preceding stack depth.
+- Split a single dense relationship family into paired left/right columns,
+  placing two icons per row and keeping both label columns outside the focus.
+  Smaller lists retain the established single-column relationship region.
+- Added an explicit open-stack hierarchy above the graph canvas. Every opened
+  level keeps its sibling choices together across the row, marks the active
+  branch as `Open below`, names the level shown in the graph, and moves inactive
+  siblings out of the child canvas. Switching branches or using browser Back
+  therefore produces a visible structural change as well as different counts;
+  relationship rows use those groups' human labels rather than encoded routes.
+- Compressed the graph chrome without flattening its visual hierarchy: node or
+  relationship keys now share one horizontally scrollable rail with authority,
+  hierarchy levels use slimmer breadcrumb-like rows, and facet cards use tighter
+  headers, value rows and three-value summary samples so more of the corpus and
+  graph remain visible at laptop and tablet heights.
+- Added an evidence-backed Heritage Evaluation Foundry engineering postmortem,
+  complete public-safe prompt-response trace, machine-readable process
+  registers and a modular content-addressed report builder. The analysis
+  reconstructs all three pull requests and six green workflows, identifies
+  late-discovery amplification, and specifies an Evaluation Profile v2 impact
+  planner and selective-rerun architecture. Rendered reading pages now declare
+  the project-relative SVG favicon so direct documentation journeys do not
+  create a spurious `/favicon.ico` browser error.
+- Implemented every postmortem recommendation: Evaluation Profile v2 and its
+  consumer lock; a fail-closed, explainable impact planner; promotion evidence
+  outside candidate roots; `normalized-core` and per-plane emitters with
+  manifest-owned changed-only writes; 13 adversarial late-finding
+  microfixtures; conditional parallel CI plus nightly three-engine shadow
+  assurance; content-addressed Site components; hash-sharded semantic and link
+  intents; an independently rooted heritage publication unit; and an annotated,
+  attested, immutable-release policy. The faithful, tiny and synthetic
+  candidates now share one explicit external URL family while remaining
+  identity- and count-isolated.
+- Made the public verification harness resolve GitHub Pages project-root
+  bundle paths, wait for client-rendered identity, select a single terminal
+  journey and return a failing exit status when any browser journey fails.
+- Made every rendered reading-page return link target the project directory
+  root rather than the non-route `/index.html`, and replaced the generated SPA
+  fallback with a standalone, accessible 404 whose assets and return link stay
+  inside the `/okf-explorer/` GitHub Pages project root.
+- Replaced the retired HAR `/list-entry/{NHLE}` inference with the live
+  Historic England register search bound by an exact `q=ListEntry` parameter;
+  direct NHLE rich pages remain unchanged. YAML-LD record links now prefer the
+  Pages project root so SvelteKit hydrates the governed deep route rather than
+  treating `/index.html` as an application route.
+- Made the external tiny-bundle acceptance fixture wait for the expected
+  selected-record heading, so browser success proves hydration completed
+  instead of merely observing the pre-hydration panel shell.
+- Added a production-scale Evaluation Foundry exemplar for every supported
+  National Heritage List for England feature intersecting the exact Coventry
+  and Warwickshire district boundaries, plus sanctioned annual Heritage at
+  Risk workbook evidence from 2013 to 2025.
+- Added a separate source-backed tiny assurance fixture and a clearly labelled,
+  default-off synthetic supplement so sparse semantic capabilities can be
+  demonstrated without contaminating faithful records, counts or search.
+- Extended OKF Markdown additively with governed YAML-LD identity, predicates,
+  qualified assertions and deterministic JSON-LD projections, while retaining
+  backward-compatible rendering for consumers that understand only ordinary
+  YAML front matter and Markdown.
+- Added Explorer presentations for heritage detail, source geometry and
+  qualified graph evidence, together with bounded alternative-name and
+  one-edit typo-tolerant search whose corrections remain visible to users.
+- Added a beginner-facing process, 100-question evaluation suite, executable
+  consumer journeys, source acquisition and reconciliation receipts,
+  identifier-bound link validation, release-root integrity checks and rendered
+  HTML publication for the faithful, tiny and synthetic products.
+- Promoted the Coventry and Warwickshire profile from provisional to evaluated
+  after its exact GitHub Pages descriptor and release root passed the terminal
+  browser journey; published copy-ready faithful, tiny and synthetic entry
+  points and registered the exemplar in the YAML-LD bundle registry.
+- Added a final release-page journey action and a digest-bound, policy-frozen
+  tagged-release evidence handoff, while excluding accidental Foundry
+  evaluator output from both Git and Site assembly so post-deployment receipts
+  cannot alter the verified publication closure. GitHub currently reports the
+  release itself as mutable, which the postmortem records as remaining work.
+
+## v0.5.7 - 2026-07-29 - Fail-closed descriptor identity
+
+- Fail closed when a document declares a large-corpus schema without the
+  matching `okf-large-corpus` kind, or declares the large-corpus kind without
+  the supported schema, instead of silently normalising it as an empty small
+  bundle.
+- Added unit and real-browser malformed/degraded descriptor coverage for
+  producer compatibility gates.
+
+## v0.5.6 - 2026-07-29 - Consumer-proof Foundry releases
+
+- Added a dry-run-first repository bootstrap scaffolder/checker for empty,
+  imported and explicitly adopted targets. It creates only reviewed
+  foundations and disabled CI, preserves existing files and never initializes
+  Git, creates a remote, pushes or publishes.
+- Added a bundle-agnostic, package-level real-browser acceptance command that
+  binds the exact Explorer source/lock/build, bundle tree and descriptor
+  identity to declarative journeys, requests, console output, restored state
+  and terminal outcome.
+- Extended the authoring profile with repository lifecycle, executable
+  consumer identity, explicit compatibility windows, concrete validator paths
+  and a 60-second tool-first public-URL share gate.
+- Made the Foundry authoring contract machine-check a pinned consumer
+  inventory and lock, a connected producer-to-public-route dependency graph,
+  two-stage real-consumer fixtures, digest planes, bidirectional compatibility
+  and post-deployment deep links.
+- Updated both Foundry prompts, the prompt kit, beginner guidance, schema,
+  template and semantic validator so a producer-only pass cannot authorise a
+  release.
+- Made a selected large-corpus record hydrate its resource index before the
+  Resources view renders, with a three-browser regression proving the linked
+  resource is visible while targeted Graph hydration remains bounded.
+
+## v0.5.5 - 2026-07-29 - Bounded relationship navigation and OKF Foundry
+
+- Replaced the misleading whole-relationship loader on large-corpus facet
+  cards with bounded related-record previews, exact match totals and
+  index-derived Graph/Links projections. Worker-backed facets no longer
+  attempt full record or relationship hydration when their bounded postings
+  already provide the required context.
+- Made search-result selection load the chosen record's route-scoped adjacency
+  immediately, while preserving the whole-corpus memory guard.
+- Documented the distinction between the small semantic representations,
+  chunked JSON assertion plane and facet membership; added a copy-ready UK
+  Legislation AI traversal and declared the current absence of a
+  source-and-target route index for the official-effects datapack.
+- Published the complete documentation dependency graph as responsive HTML,
+  including links embedded in tables and links from documentation into the
+  sample knowledge corpus. Internal Markdown navigation now rewrites to
+  deterministic HTML routes with stable heading anchors; a post-build crawl
+  fails publication for raw same-site Markdown links, missing targets or
+  missing fragments, duplicate identifiers, and missing scripts, stylesheets
+  or images. Raw source remains machine-discoverable as an exact-build
+  alternate, while the visible source link uses GitHub's rendered HTML view.
+- Published the Foundry prompt kit, both copy-ready prompts, worked examples
+  and authoring profile as safe, responsive HTML. The prompt pages provide
+  accessible one-click exact-copy controls, plain-text downloads and an
+  AI-neutral procedure and completion checklist while retaining canonical
+  Markdown and schema URLs.
+- Made the rendered beginner guide's desktop chapter panel independently
+  scrollable without moving the article, while retaining normal mobile flow.
+- Added deterministic, browser-rendered HTML publication for the complete
+  beginner learning path, with accessible chapter navigation, responsive
+  tables, safe Markdown handling and links back to the source files.
+- Updated Playwright to 1.62.0 and `svelte-check` to 4.7.4 in one
+  release-assured maintenance change, including the synchronised lockfile and
+  CycloneDX dependency inventory.
+- Updated Playwright to 1.62.1, synchronised the CycloneDX inventory, and
+  verified the patch with the affected Chrome journeys before the full
+  Chrome, Firefox and WebKit assurance matrix.
+- Updated SvelteKit to 2.70.1, Svelte to 5.56.8 and Vite to 8.1.5 while
+  retaining the compatible TypeScript 6 toolchain, and limited the Dependabot
+  Explorer stack group to minor and patch releases so future major migrations
+  receive isolated pull requests and validation.
+- Updated SvelteKit to 2.70.2 and Vite to 8.2.0, refreshed and checked the
+  CycloneDX dependency inventory, and verified the resolved dependency set
+  with a clean moderate-or-higher registry audit. The update resolves the
+  repository's transitive PostCSS advisory with PostCSS 8.5.25.
+- Added a 20-chapter, zero-background learning path covering the complete OKF
+  Explorer foundation: browser and static-app concepts, Markdown and bundle
+  publication, large-corpus loading, deterministic retrieval, graph and
+  semantic-web modelling, validation and provenance, coordinated views,
+  geospatial and legislation data, AI infrastructure and federated AI,
+  OKF v0.2 trust and lifecycle, bundle federation, Foundry authoring, governed
+  enrichment and release assurance, security and accessibility, publication
+  checks and contributor workflows.
+  The documentation landing page, repository guide, README and advanced
+  ontology architecture now route unfamiliar readers into the relevant
+  beginner chapters.
+- Added a general two-stage OKF authoring protocol: a read-only domain and
+  standards warm-up followed by a deterministic build, assurance and
+  publication controller.
+- Added the versioned `okf-domain-profile.v1` JSON Schema and a complete YAML
+  template so research decisions pass between tasks as a bounded,
+  hash-lockable contract instead of an unbounded transcript.
+- Added a profile validator for JSON Schema, evidence/task/rights/decision
+  cross-references and byte-independent JSON/YAML data equivalence.
+- Made the handoff carry an explicit collection profile, material claim
+  register, calibrated-confidence rules, source format/identity/version
+  behaviour, identifier schemes, task risks and standards conflicts so the
+  machine contract can represent every fact required by the warm-up prompt.
+- Encoded source-native identity, orthogonal authority/evidence axes,
+  standards applicability, tiny-fixture preflight, immutable acquisition,
+  content-addressed reuse, optional governed model enrichment, frozen-candidate
+  security and byte-identical RC promotion.
+- Grounded the protocol with cross-domain checks for UK legislation, ONS data
+  discovery and GOV.UK content while retaining the strict boundary between OKF
+  0.2 core conformance and the additive Foundry production profile.
+
+## v0.5.4 - 2026-07-27 - Pages artefact closure
+
+- Preserved the deterministic Svelte fallback during final Pages assembly
+  instead of replacing its manifest-bound `404.html` with a second file.
+- Added a fail-closed post-assembly check that rehashes every application
+  material declared by the canonical build manifest before Pages upload.
+- Retained the independently observed v0.5.3 mismatch as evidence for the
+  corrective release rather than weakening the immutable-artefact gate.
+
+## v0.5.3 - 2026-07-27 - Reproducible production builds
+
+- Bound SvelteKit's application-version seed to the synchronised package
+  version, removing its timestamp default from application-version metadata
+  and client chunk generation.
+- Added a fail-closed two-build regression that cleans generated state before
+  each production build and compares every generated path and file digest,
+  including the exact `index.html` bytes.
+- Made both pull-request CI and the Pages publication workflow run the
+  deterministic two-build proof before site assembly.
+- Published the canonical per-file build manifest with the Pages app and made
+  the release-bound runtime stage its exact bytes plus every described build
+  file, closing the prior self-attested whole-tree digest boundary.
+- Added fail-closed validation for missing, extra, duplicate, unsafe, linked
+  and tampered build materials while retaining in-memory manifest derivation
+  for mutable local v1 acceptance runs.
+
+## v0.5.2 - 2026-07-26 - Frozen runtime evidence closure
+
+- Made the release-bound legislation runtime receipt self-contained beneath its
+  external evidence directory, with safe relative paths and byte/SHA-256
+  identities for the runner, both bundle descriptors, the Pages build index
+  and every Chrome screenshot.
+- Added exact build-index/tree and screenshot-set integrity checks, the
+  canonical external receipt basename, and an explicit WCAG 2.2 AA
+  accessibility gate for the Whole-Law release controller.
+- Kept the Explorer UI and browser journey unchanged while making a passing
+  `okf-explorer-runtime-acceptance.v2` receipt independently rehashable.
+
+## v0.5.1 - 2026-07-26 - Governed enrichment runtime hardening
+
+- Added byte- and SHA-verified cross-binding for the accepted assertion
+  manifest, independent audit and reviewer receipt before model-assisted
+  relationships can become available.
+- Made model-enrichment shard loading fail closed and retryable, with global
+  assertion-ID uniqueness, exact route/predicate/target validation and
+  incomplete-route recovery that cannot be hidden by cached healthy shards.
+- Preserved and displayed assertion rights provenance, restored reactive
+  availability state, and announced model-enrichment status and failures to
+  assistive technology.
+- Updated the legislation runtime and evaluation journeys for compact facets,
+  bounded record hydration and the current 906,754-relationship publication.
 
 ## v0.4.2 - 2026-07-11 - Explorer identity alignment
 
@@ -100,12 +1435,201 @@ All notable changes to the Warwickshire same-origin profile are recorded here.
   series, closing the low-severity `GHSA-pxg6-pf52-xh8x` alert reported after
   the repository rename.
 
-## Upstream development included at the fork point
+All notable changes to this repository are recorded here. Entries are grouped by
+date and describe the user-visible publication effect, validation run, and any
+source-of-truth changes.
 
-These entries describe upstream development present when the Warwickshire
-profile was created. They are retained for lineage and are not the active
-Warwickshire `Unreleased` section.
+## v0.5.0 - 2026-07-26 - Whole-Law federation and bounded runtime
 
+- Added governed metadata-term registries and closed-world validation reports
+  to the bundle-wiki profile. Explorer now provides searchable bundle-wide and
+  record-scoped term definitions, provenance and validation evidence; bundle
+  UI terms can also supply existing `(i)` help text. Semantic-resource labels
+  are derived from their actual YAML-LD or JSON-LD serialisation.
+- Added a reproducible production-build acceptance runner and evidence receipt
+  for the final local Whole-Law/Legislation publication. Chrome, Firefox and
+  WebKit now prove federation-child completion, sub-1 MiB compressed startup,
+  bounded cold/warm search, facet layout, coloured graph relationships,
+  keyboard operation and release-blocking axe results.
+- Bounded histogram segment counts by the provider presentation contract so
+  24-pixel keyboard targets no longer overflow the navigation panel, and
+  normalised source-native `derived-non-official` authority to the distinct
+  derived graph style without losing its provenance label.
+- Added the additive `okf-explorer-federation.v1` control plane and
+  `okf-relationship-assertion.v2` contract. Federations load only their
+  overview first; child descriptors and data shards remain untouched until a
+  user selects a child.
+- Added fail-closed child coverage, authority, freshness, discovery-route and
+  relationship-summary validation. Official, deterministic-derived,
+  model-assisted and unclassified relationships now have distinct labels,
+  detail evidence and graph styling.
+- Added declared descriptor fallback routes so Pages, raw-content and mirrored
+  descriptors can recover in a fixed order without probing guessed repository
+  paths. Repository, documentation and archive links remain visible recovery
+  destinations but are never parsed as descriptors.
+- Added bounded YAML-LD loading for `.yamlld`, `.yaml` and `.yml` documents,
+  including safe JSON content sniffing when static hosts use
+  `application/octet-stream`. YAML uses the 1.2 core schema, unique keys, no
+  merge keys, no aliases and no custom/executable tags.
+- Registered the future UK Whole-Law OKF descriptor and its declared raw
+  fallback, repository, documentation, release archive and repository
+  subpath.
+- Made single-child federation landings useful above the fold and added a
+  separate compact inventory for researched source families, so planned legal
+  source coverage is visible without misrepresenting it as implemented child
+  bundles.
+- Prevented complete facet indexes from falling through to whole-corpus record
+  hydration while a search worker is starting or lacks filter postings.
+  Low-cardinality searchable facets retain coloured distributions, facet
+  inventory counts are explicit, stale federation routes are cleared when a
+  child opens, and a 50,000-record safety gate rejects unsafe full-index loads
+  with a recoverable explanation.
+- Added `okf-record-locator-sharded.v1` support so a selected result hydrates
+  one integrity-aware record shard by route or search ordinal. Corpus-wide
+  relationship hydration is likewise bounded at 100,000 advertised rows;
+  larger bundles continue through summaries and route-scoped adjacency.
+- Replaced the intermediate-width stacked workspace with a two-column
+  navigation/stage layout and a collapsible detail row, preserving the
+  overview-first Explorer experience in the in-app browser.
+
+- Made OKF Explorer a dual-version OKF v0.2 exemplar. Structured
+  `generated`, `sources`, `verified`, lifecycle, freshness and Attested
+  Computation fields now have first-class passive presentation; v0.1
+  `timestamp` and body `# Citations` remain labelled fallbacks, with v0.2
+  fields taking precedence. Loading a bundle never executes its computation,
+  executor or attester.
+- Migrated the canonical AI infrastructure Markdown to v0.2, including
+  spec-shaped reserved indexes/log, actor-bearing generation and verification,
+  lifecycle status and structured provenance. Generators for the small bundle,
+  UK Government APIs and UK Legislation now emit v0.2 Markdown while retaining
+  the existing YAML-LD, federation, static-search, facet, datapack, integrity
+  and presentation extensions. The migration uses the corpus's Git authoring
+  commit for generation time instead of treating source publication dates as
+  provenance events. Actor-free legacy `verified: yes` flags remain
+  unverified rather than being upgraded into invented human review events.
+- Split documentation and checks between permissive OKF v0.2 core conformance
+  and the stricter Explorer authoring profile. Structured and unknown
+  frontmatter fields/types survive generated bundle projection.
+- Accepted the dual reader against a locally rebuilt pre-migration `okf-ons`
+  publication and its v0.2 successor: both load all 5,097 records, 12 facet
+  bars and the exact 382-record region reduction, while only the v0.2
+  descriptor advertises its core Markdown layer.
+- Changed large-corpus Timeline to distinguish the period represented by a
+  release from the date its catalogue metadata was harvested. Repeating
+  datasets are grouped into series and compact year/month release links;
+  catalogue timestamps are used only as an explicitly labelled fallback.
+- Added structured record comparison. Explorer separates other releases in
+  the same series from genuine alternative datasets, links each item to its
+  own durable route, displays declared field differences, and suppresses
+  legacy `Compare before selecting:` prose when the structured alternative
+  records are present. Title-derived series are explicitly labelled as a
+  presentation aid rather than asserted semantic identity.
+- Changed Map to use a bounded viewport with an internally scrolling result
+  list and compact horizontally scrollable reduction controls. A labelled
+  OpenStreetMap reference layer supplies geographic context while the
+  metadata, coverage outline and result list remain usable if map tiles fail.
+- Fixed single-predicate facet graphs to use the same stable relationship
+  region layout as other metadata fan-outs, retain an accessible Layout
+  control, and avoid the inconsistent diagonal stack previously shown for
+  values such as `every 12 weeks`.
+- Added hierarchy-aware, diverse high-cardinality facet previews. Declared
+  bundle hierarchies take precedence; legacy facets receive bounded Year,
+  Format, Region and Other summaries instead of a count-only sample. Documented
+  SKOS hierarchy authoring in YAML-LD and added SKOS/RDFS/OWL prefixes to the
+  pinned bundle-wiki context.
+- Changed committed view, graph-key, label, node-type, relationship-highlight
+  and graph-layout choices to create addressable browser history entries.
+  Re-selecting or Ctrl/Cmd-clicking a highlighted graph node or relationship
+  now clears it. The compact graph toolbar again exposes Auto versus
+  relationship-region layout.
+- Locked the focused node's type in the visible node key so a stale or newly
+  selected hide-type control cannot imply that the graph focus can disappear.
+- Added a maintained viewer capability inventory, feature matrix, conflict
+  register and regression contract across the classic OKF canvas, modern
+  LLM-Wiki, CFTE, OKFR, original CKAN and canonical Svelte lineages.
+- Added safe small-bundle Markdown tables and Mermaid-lite flowcharts, plus
+  exchange-aware Narrative and Timeline presentations that preserve user
+  prompts, final answers and chronological commentary.
+- Changed small- and large-corpus graphs to use complete non-overlapping
+  node-and-relationship label layers on a two-second cycle, with persistent
+  selected context, Pause/Resume and reduced-motion handling. Reciprocal
+  directed relationships now use distinct curves, collapse identical labels
+  and place different labels nearer their sources.
+- Added predicate-and-direction relationship controls for large focus graphs:
+  Auto or explicit semantic regions, group/member visibility, drag and button
+  ordering, reset and durable `graph.*` URL state. The node key now lists only
+  types in the displayed graph, and left-list labels remain visible in an
+  above-left placement that keeps them out of centre-facing relationships.
+  Controlled list and staircase regions keep every node label visible without
+  cycling, paint labels above node symbols, compact vertical lists, spread
+  staircases across the available width and separate same-side relationship
+  lanes. The logical canvas now follows the centre panel aspect ratio, and the
+  lower-right staircase exit is reserved before right-list placement. Repeated
+  edge predicates are consolidated to one label per group; only conflicting
+  edge labels cycle.
+- Made graph and relationship controls compact and sticky within the centre
+  panel. Plain wheel input now scrolls the panel, while the slower graph zoom
+  requires Ctrl/Command+wheel or the explicit buttons.
+- Replaced the wrapping graph key and layout panels with a two-line control
+  surface. The first line keeps zoom, label-set cycling, node types,
+  and relationship types available; the second line switches between
+  only the node and predicate types present in the current graph. Node types
+  can be hidden without losing their restore control, while selecting a
+  relationship type highlights its source nodes, target nodes and directed
+  edges. Relationship inspection now separates Source, Relationship and Target
+  evidence into three tabs, and SVG keyboard focus follows the edge instead of
+  drawing a rectangular outline across unrelated nodes. The Nodes and
+  Relationships mode buttons show their current visible counts. Redundant
+  on/off wording and the exposed Layout panel were removed; pressed styling
+  identifies the active key while the automatic relationship-region layout is
+  retained. Focus graphs now repeat the focused node name as an SVG title and
+  anchor publisher and licence nodes at the lower left and lower right, giving
+  exported screenshots a document-like final line.
+- Fixed the dual-collapsed workspace grid so both context rails remain 44px,
+  and fixed wrapped relationship-drawer rows so their text cannot overlap.
+- Added edge width for an explicit varying numeric relationship metric while
+  keeping constant or undocumented scores neutral and arrowheads fixed-size.
+  Persistent label placement now looks ahead so a focus label cannot consume
+  the only viable position for a boundary-node label.
+- Added a layered ontology and semantic graph architecture covering RDF/JSON-LD
+  instances, RDFS/SKOS vocabularies, bounded OWL 2 RL-style inference, SHACL
+  validation, DCAT/PROV evidence, predicate registries and the strict
+  separation of semantics from Explorer presentation.
+- Fixed graph panning that previously failed when a drag began over a node or
+  relationship, suppressed native drag ghosts, retained context in folded side
+  rails, and made detail panels reliably touch-scrollable on mobile.
+- Fixed invisible node and label interaction rectangles inheriting white SVG
+  borders that cut through graph labels.
+- Added unit and Playwright regression coverage for label-layer completeness,
+  reciprocal edges, the ONS 21-node/20-relationship focus graph, graph panning,
+  safe rich Markdown, conversation views, collapsed context and Android-sized
+  detail scrolling.
+- Added optional `okf-explorer-provider-datapack.v1` loading for large corpora,
+  with formal pack/manifest schemas, required governed-snapshot bindings,
+  SHA-256 manifest/pack integrity, bundle-base-path validation, non-exhaustive
+  reviewed comparison evidence, HTTPS-only provider actions, and visible
+  bundle, record/search and inherited resource status. Matching records outside
+  the bounded comparison are labelled as not reviewed, while paired examples
+  without a recorded difference are labelled as aligned only in reviewed
+  fields. Paired rows with changed known fields require exact, unique difference
+  evidence and fail closed when it is missing; declared differences must also
+  reference paired examples and match their known values. The deterministic ONS
+  fixture demonstrates a governed April 2026 Average house price snapshot
+  alongside a May 2026 reviewed upstream reference without claiming live
+  validation.
+- Added an experimental bundle-level Explorer presentation profile and a more
+  compact facet workspace: provider labels/order/control defaults, bundle-local
+  user pin/hide/reorder preferences, complete-data distribution strips,
+  numeric/date histograms, search-first high-cardinality previews, hierarchy
+  browsing, and tabbed result/detail panels. Multi-valued facet reduction is
+  now bounded and assignment-aware.
+- Removed complete single-valued dimensions from Suggested facets because they
+  cannot reduce the current result set. They remain available under All and
+  remain visible when selected, explicitly shown or pinned.
+- Restored small-bundle graph and link compatibility with generator-produced
+  `edges`, added Markdown-body search and safe body rendering, exposed
+  credential-redacted source/resource links, and made selected Schema.org,
+  provenance and complete node JSON available from the detail pane.
 - Updated the SvelteKit, Svelte, Vite and `svelte-check` development stack while
   retaining TypeScript 6.0.3 until the Svelte checker supports TypeScript 7's
   changed module shape.
@@ -139,7 +1663,7 @@ Warwickshire `Unreleased` section.
   silent or crashed workers, malformed facet values, metadata-gap filters and
   approximate capped-posting totals. Dynamic facets and result summaries now
   remain explicit about fallback and truncation semantics, and legacy small
-  bundles normalize scalar alias/tag fields before client-side searching.
+  bundles normalise scalar alias/tag fields before client-side searching.
 - Added persona, user-story and question traceability for every hosted README
   exemplar, plus opt-in browser journeys for retrieval URL state, facets,
   sorting, graph relationships, drawer resizing, folded full-record sections
@@ -170,7 +1694,7 @@ Warwickshire `Unreleased` section.
   canonical source, authoritative publisher, update frequency, current release,
   full/delta distributions, API access, technical specification and licence.
 - Added a complete work-level UK legislation OKF pack generated from every year facet in the official legislation.gov.uk Atom catalogue, including primary, secondary, draft, devolved, retained-EU and historical document types.
-- Added ELI 1.5 / ELI-I, Schema.org `Legislation`, legislation.gov.uk FRBR/CLML and Akoma Ntoso crosswalks, normalized legal categories and title-derived topic navigation with explicit non-authoritative classification warnings.
+- Added ELI 1.5 / ELI-I, Schema.org `Legislation`, legislation.gov.uk FRBR/CLML and Akoma Ntoso crosswalks, normalised legal categories and title-derived topic navigation with explicit non-authoritative classification warnings.
 - Added progressive official CLML discovery in the Svelte Explorer. A selected work can resolve every Part, Chapter, section, article, regulation, rule, schedule, paragraph and nested P1-P7 structure with official passage links and copyable provenance citations.
 - Added combined static-title and official remote full-text search, legislation-specific facets, complete access-method documentation and disclosure of the currently authenticated research bulk/SPARQL surfaces.
 - Added a 100-question barrister-oriented AI-answer evaluation suite, 100-point legal/provenance rubric, answer JSON Schema and deterministic evaluator with a hard cap for missing official or proposition-level provenance.
@@ -209,7 +1733,7 @@ Warwickshire `Unreleased` section.
   execution.
 - Fixed large-corpus browser searches by copying reactive retrieval state into
   structured-clone-safe data before posting requests to the search worker.
-- Standardized absent and legacy `None`/`null` metadata as `Not specified
+- Standardised absent and legacy `None`/`null` metadata as `Not specified
   (metadata gap)` in record details and illustrated the wording in the new
   manual.
 - Replaced the ambiguous large-corpus `tokens` label with `distinct indexed
@@ -415,3 +1939,14 @@ Warwickshire `Unreleased` section.
   covering facet search/open state, graph legend/drawer, bundle suggestion
   dismissal, and timeline latest/quarter ordering.
 - `git diff --check`
+
+## Learning presentation for small bundles
+
+- Added an opt-in learning path with ordered goal cards, contextual record pages,
+  connections and expandable source evidence.
+- Small bundles can declare conceptual facets. Source and review filters remain
+  available as secondary information; existing bundles retain their defaults.
+- File imports now honour a valid authored starting route and clear stale
+  inspections. URL-loaded bundles retain explicit deep links and filter state.
+- Added a reusable content-design guide and tests for presentation validation,
+  legacy behaviour and conceptual facet intersections.

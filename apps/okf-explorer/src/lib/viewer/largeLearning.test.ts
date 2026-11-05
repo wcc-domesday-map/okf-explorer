@@ -1,0 +1,79 @@
+import { describe, expect, it } from 'vitest';
+import { largeLearningPresentation, selectedLearningStep } from './largeLearning';
+const fixture = () => ({ schema: 'okf-large-learning-presentation.v1', title: 'Learn to assess evidence', paths: [{ id: 'assess', title: 'Assess evidence', steps: [{ route: 'dataset/example', title: 'Read the source', outcome: 'Explain its limits', practice: 'List two gaps.', minutes: 15 }] }] });
+describe('large learning overlay', () => {
+  it('preserves authored ordering, outcomes and practice without corpus hydration', () => {
+    expect(largeLearningPresentation(fixture())?.paths[0].steps[0]).toEqual(fixture().paths[0].steps[0]);
+  });
+  it('accepts source-native DWP routes without inventing a dataset prefix', () => {
+    const raw = fixture(); raw.paths[0].steps[0].route = 'chapter/77';
+    expect(largeLearningPresentation(raw)?.paths[0].steps[0].route).toBe('chapter/77');
+  });
+  it('keeps legacy and unknown versions inactive', () => {
+    expect(largeLearningPresentation(undefined)).toBeNull();
+    expect(largeLearningPresentation({ ...fixture(), schema: 'future' })).toBeNull();
+  });
+  it('rejects external, traversal, malformed and duplicate routes', () => {
+    for (const route of ['https://example.org', 'dataset/../secret', 'dataset/%oops', 'constructor']) {
+      const raw = fixture(); raw.paths[0].steps[0].route = route;
+      expect(largeLearningPresentation(raw)).toBeNull();
+    }
+    const raw = fixture(); raw.paths[0].steps.push(raw.paths[0].steps[0]);
+    expect(largeLearningPresentation(raw)).toBeNull();
+  });
+  it('rejects oversize paths and missing outcomes', () => {
+    const raw = fixture(); raw.paths[0].steps = Array(25).fill(raw.paths[0].steps[0]);
+    expect(largeLearningPresentation(raw)).toBeNull();
+    const empty = fixture(); empty.paths[0].steps[0].outcome = '';
+    expect(largeLearningPresentation(empty)).toBeNull();
+  });
+});
+
+describe('assessed programmes',()=>{
+ const v2=()=>({...fixture(),schema:'okf-large-learning-presentation.v2',programme:{id:'demo',version:'1',assessors:[]},paths:[{...fixture().paths[0],prerequisites:[] as string[],personas:['Evidence reviewer']}]});
+ it('rejects cycles, duplicate and unknown prerequisites',()=>{
+  for(const prerequisites of [['assess'],['missing'],['missing','missing']]){
+   const v=v2();v.paths[0].prerequisites=prerequisites;expect(largeLearningPresentation(v)).toBeNull();
+  }
+ });
+ it('does not silently truncate assessed objectives',()=>{
+  const v=v2();v.paths[0].steps[0].outcome='x'.repeat(801);expect(largeLearningPresentation(v)).toBeNull();
+ });
+ it('accepts bounded programmes with an explicit empty assessor roster',()=>{
+  expect(largeLearningPresentation(v2())?.programme?.id).toBe('demo');
+ });
+});
+
+describe('unassessed linked learning', () => {
+  it('retains the chosen path when different activities share a source record', () => {
+    const presentation = largeLearningPresentation({ ...fixture(), paths: [
+      { id: 'building', title: 'Building heights', steps: [{ route: 'concept/height-datum', title: 'Reference a building height', outcome: 'Distinguish absolute and relative height' }] },
+      { id: 'road', title: 'Road elevation', steps: [{ route: 'concept/height-datum', title: 'Clarify road elevation', outcome: 'Distinguish elevation gain from a vertical coordinate' }] }
+    ] })!;
+    expect(selectedLearningStep(presentation, 'concept/height-datum', 'road')?.step.title).toBe('Clarify road elevation');
+    expect(selectedLearningStep(presentation, 'concept/height-datum', 'building')?.step.title).toBe('Reference a building height');
+    expect(selectedLearningStep(presentation, 'concept/height-datum')).toBeNull();
+    expect(selectedLearningStep(presentation, 'concept/elsewhere', 'road')).toBeNull();
+  });
+  it('retains source record links and suggested prerequisites without creating an assessed programme', () => {
+    const raw = { ...fixture(), paths: [
+      { ...fixture().paths[0], prerequisites: [] as string[], personas: ['Evidence reviewer'], steps: [{ ...fixture().paths[0].steps[0], evidence_routes: ['concept/height-datum'] }] },
+      { id: 'compare', title: 'Compare the references', prerequisites: ['assess'], steps: [{ route: 'dataset/another', title: 'Check the second source', outcome: 'Keep evidence scopes separate' }] }
+    ] };
+    const result = largeLearningPresentation(raw)!;
+    expect(result.paths[0].steps[0].evidence_routes).toEqual(['concept/height-datum']);
+    expect(result.paths[1].prerequisites).toEqual(['assess']);
+    expect(result.paths[0].personas).toEqual(['Evidence reviewer']);
+    expect(result.programme).toBeUndefined();
+  });
+  it('rejects missing, cyclic or duplicate prerequisite links in the unassessed overlay', () => {
+    for (const prerequisites of [['assess'], ['missing'], ['missing', 'missing']]) {
+      expect(largeLearningPresentation({ ...fixture(), paths: [{ ...fixture().paths[0], prerequisites }] })).toBeNull();
+    }
+  });
+  it('rejects malformed, external and repeated supporting record references', () => {
+    for (const evidence_routes of ['dataset/other', ['https://example.test'], ['dataset/a', 'dataset/a']]) {
+      expect(largeLearningPresentation({ ...fixture(), paths: [{ ...fixture().paths[0], steps: [{ ...fixture().paths[0].steps[0], evidence_routes }] }] })).toBeNull();
+    }
+  });
+});

@@ -1,0 +1,316 @@
+# Governed context assembly
+
+To examine a retained result beside its source, use the
+[Evidence workbench](evidence-workbench.md). It separates discovery descriptions,
+selected evidence, traversal, delivery and local review proposals.
+
+Ask OKF assembles a bounded evidence package from an explicitly declared
+producer index. It resolves declared concept phrases, follows directed
+relationships and checks the producer's scoped evidence requirements. It does
+not generate an AI answer or decide whether a person qualifies for a benefit.
+
+The byte budget includes source text, provenance, traversal paths and gap
+explanations. When the package is too large, the engine removes whole selected
+records and recalculates missing requirements before measuring again. It must
+not discard an otherwise usable package merely because a final missing-evidence
+explanation was added after trimming. If the remaining metadata itself cannot
+fit, an explicit insufficient-evidence fallback remains valid. Smaller packages
+can omit important material; their budget diagnostics are part of the evidence
+boundary, not an answer-quality score.
+
+Search remains a separate discovery operation. Its ranking is not a substitute
+for the context engine's dependency and provenance checks. The
+[inspection](ask-okf-gap-analysis-2026-09-16.md) and
+[architecture decision](adr-ask-okf-context-assembly.md) explain this extension.
+
+## Components
+
+| Component | Responsibility |
+| --- | --- |
+| Producer index | Declare aliases, evidence, semantic assertions, scope and required context in a versioned document. |
+| `src/lib/context/index.ts` | Resolve phrases and assemble evidence without browser state, external retrieval, DWP-specific code or model calls. |
+| Source adapter | Load the declared index, verify its digest and snapshot, and preserve its source identity. |
+| Ask OKF interface | Present the returned package, paths, provenance and missing evidence. |
+| Optional tool adapter | Expose the same read-only operations where the current host supports them. |
+| Independent evaluator | Compare an observed package with frozen A–H requirements. |
+
+The paths above are relative to `apps/okf-explorer/`. A bundle without the
+optional `entrypoints.context_assembly` index is not silently promoted into a
+governed context source. Its ordinary Search remains available.
+
+## What a producer declares
+
+The [additive v1 schemas](../profiles/context-assembly/v1/README.md) separate
+concept, evidence and scope records. Each record has a stable semantic ID and
+local route. Source passages retain their text, locator, source-file digest,
+literal digest, capture date, authority, rights and scope. Any source date keeps
+its separate role and precision.
+
+Assertions name their source, target and absolute predicate. The engine follows
+the supported DC Terms and SKOS predicates in their declared direction. A
+`skos:related` association remains an association; it does not become a legal
+condition or entailment. Context requirements identify necessary records for a
+declared set of resolved concepts. They are checked after traversal and never
+used as hidden retrieval seeds.
+
+An optional `covers` list explicitly includes supporting concepts in a
+requirement's scope. Every resolved concept must be covered by an applicable
+requirement's `when_all` or `covers` list. Otherwise the package is insufficient;
+one supported part cannot silently stand in for the whole question.
+
+An optional `required_paths` list declares exact directed assertion chains.
+The engine checks that their records and assertion IDs are retained with the
+specified direction, even if another route reached those records. Paths are
+checked after traversal and never used to seed it. Missing paths make the
+requirement insufficient; finding all the named records alone is not enough.
+
+If a node, relationship or byte budget loses a valid declared path, the engine
+may make one additional allocation pass prioritising that path from the same
+resolved seeds. Its endpoints never become hidden seeds. Whole records and
+qualifications remain subject to all existing caps and governance checks. The
+[allocation decision](adr-required-evidence-allocation.md) explains this bounded
+behaviour and the separate correction that keeps declared dependencies visible
+when their supporting edge is trimmed.
+
+The producer remains responsible for the quality and completeness of that
+modelling. A missing relationship can produce an incomplete package even when
+the original source document exists. A complete declared dependency closure
+does not prove that every relevant legal source has been modelled.
+
+## Read the package
+
+Start with `evidence_status`, the resolved concepts and any ambiguities or
+unresolved terms. Then inspect `selected`, its directed `paths`, the retained
+`relationships` and each requirement's `missing` list. Source text is evidence,
+never an instruction to execute code or fetch another resource.
+
+The three evidence outcomes are:
+
+- **Sufficient:** the applicable, declared requirements are retained within the
+  package's scope, with no reported blocking gaps. This is not a verified answer.
+- **Insufficient:** required evidence, interpretation, provenance or budget is
+  missing. Read the specific gaps rather than inferring a negative domain fact.
+- **Conflicting:** the producer explicitly declared conflicting evidence. The
+  engine reports that conflict without selecting a winner.
+
+Conflict detection does not discover every possible contradiction in prose.
+Alias resolution uses declared phrases rather than a model's general knowledge.
+Unknown questions can therefore be insufficient even when a human could locate
+relevant material elsewhere in the corpus.
+
+## Bounds and identity
+
+Default limits are 64 records, 128 relationships, depth 6 and 524,288 bytes.
+Maximum limits are 200 records, 1,000 relationships, depth 8 and 524,288 bytes;
+the minimum byte budget is 8,192. Whole evidence records are retained or omitted;
+their text is never silently shortened to fit. The package records omissions
+and cannot describe a budget-truncated result as sufficient.
+
+`context_id` binds the deterministic package content. The package also retains
+the index URL, exact index digest and bundle snapshot. A local evaluation can
+use a public source locator while reading frozen local bytes; its receipt says
+which happened and makes no claim that the URL was fetched.
+
+## Retain an approved example
+
+An explicitly approved fixed package can also be exported as a small static
+archive. Its catalogue and evidence links preserve the exact selection and
+whole-package hash; opening it does not run the assembler or submit a question.
+This is a recorded example, separate from live replay and any AI-generated
+answer. It does not upgrade missing evidence or establish current applicability.
+
+The [archive decision](adr-retained-evidence-examples.md),
+[profile](../profiles/context-archive/v1/README.md) and
+[beginner demonstration](retained-evidence-demo.md) explain the contract and
+reader. The focused offline check is part of the existing `context-assembly`
+CI gate and the repository publication contract:
+
+```sh
+node --experimental-strip-types --test tools/context-archive/archive.test.ts
+```
+
+Its synthetic and retained local cases test exact bytes, bounded resources and
+failure behaviour. An adopting publisher must separately approve its examples,
+bind the generated files and verify the actual public host.
+
+## Execute an independent evaluation
+
+From the Explorer checkout, use the locked Python environment and Node 26:
+
+```sh
+uv sync --locked
+node --experimental-strip-types scripts/run_context_evaluation.mjs \
+  --index /path/to/assembly-index.json \
+  --case /path/to/evaluation-case.json \
+  --output /path/to/execution-receipt.json
+```
+
+The runner uses the actual TypeScript engine. It validates the index, case and
+package against pinned local schemas, checks exact source identities and
+directed paths, and independently recomputes the package identity and byte
+count. Assessor requirements never enter the assembler. Add `--check` to replay
+the deterministic checks against an existing receipt; this preserves the
+original observation timestamp.
+
+The committed study-club execution is a current-engine regression fixture. If
+the engine changes, run its command without `--check` to obtain fresh evidence,
+then replay it with `--check`. Its earlier observations remain in Git history;
+do not replace recorded implementation hashes by hand. This does not refresh
+frozen service engines or their historical packages. Application changes also
+require the separate [Heritage browser evidence refresh](okf-explorer-evaluation.md#evidence-tied-to-an-explorer-build),
+even when a synthetic context package happens to retain the same identity.
+
+Run the focused contract and evaluator controls with:
+
+```sh
+uv run --locked python -m unittest tests.test_context_assembly -v
+pnpm --dir apps/okf-explorer exec vitest run src/lib/context/context.test.ts
+```
+
+Read the [A–H evaluation method](context-assembly-evaluation.md) before
+interpreting a passing result. Existing lexical MCP measurements and earlier
+source-guided model trials remain separate evidence.
+
+## Interface and host boundary
+
+The package and evaluator work without WebMCP or a language model. Optional
+WebMCP registration is feature-detected; registration alone does not prove that
+the user's AI host can invoke the tools. Browser journeys, genuine tool calls
+and model responses require their own observations against the exact deployed
+implementation. No such outcome follows automatically from an engine test.
+
+## Full-source discovery
+
+A producer may additionally declare a hash-bound `entrypoints.context_corpus`
+manifest. Ask OKF prefers that explicitly advertised corpus; an invalid corpus
+fails closed, without silently reverting to the smaller index. The original
+`context_assembly` adapter remains compatible for producers without a corpus.
+
+The shared corpus reader selects whole pages from the complete frozen lexical
+index, then uses the existing concepts and directed assertions. Inspect the
+package's `retrieval` section for corpus/page counts, query words, scored
+candidates, fetched bytes, limits and omissions. A lexical candidate is separate
+from a resolved concept. No source selection becomes an official interpretation.
+
+Read the [full-source architecture decision](adr-full-source-context-discovery.md)
+for exact ranking, limits, integrity checks and failure behaviour. Search,
+Reader and Ask can have different declared coverage: for example, a DMG Reader
+can expose an Ask corpus that also includes ADM. Evidence without a corresponding
+Reader record links directly to its cited source.
+
+### Question wording and unresolved terms
+
+Lexical discovery and unresolved-term diagnostics share one English question
+word classifier. Question wording such as `your`, `go` and `during` does not
+become a missing domain concept simply because it appears
+in a question. For example, without declared aliases, “What happens to your
+tickets during travel?” retains `tickets` and `travel` as unresolved terms.
+Relevant source pages can still be discovered without resolving those concepts;
+the package remains insufficient when no declared evidence requirements cover it.
+
+Declared aliases are matched against the complete question **before** unknown
+words are filtered. A bundle can therefore declare `Go`, a case-sensitive short
+name or a longer phrase containing these words. Case sensitivity, longest-phrase
+matching and ambiguity remain governed by the bundle. A scaffolding-only
+question still has an unresolved task and cannot become sufficient merely
+because its unresolved-word list is empty.
+
+Substantive terms such as `loss`, `payment` and `receiving`, identifiers and
+qualification words such as `not`, `without`, `unless`, `except`, `only`,
+`before`, `after` and `until` remain visible unless a declared alias covers them.
+This is a conservative word classification, not a parser for negation, dates
+or legal conditions. The original question is retained unchanged. The existing
+Unicode alias matching and ASCII corpus tokenisation remain distinct; sharing
+the classifier does not change the source index format or its resource limits.
+
+This implementation changes affected context contents and therefore context
+identifiers. Frozen service assemblers and retained observations are unchanged;
+a later service release must admit any new assembler explicitly and verify its
+own source and engine pairing. These local changes alone do not update a live
+service or establish client, model or legal acceptance.
+
+## Relationships in large views
+
+Graph and Links expose bounded pages of relationships with counts and navigation.
+Graph shows 72 loaded incident relationships per page; Links shows 180 per page.
+Opening a relationship stack reveals its members; collapsing it restores the
+stack. Overview Links uses the bundle's actual record routes rather than assuming
+a `dataset/` prefix. A page counter describes loaded relationships, not a claim
+that an entire remote graph has already been fetched. These display controls do
+not add relationships missing from the producer's semantic model.
+
+## Logical evidence units
+
+For separately sharded summaries and large relationship graphs, the opt-in
+[source-bound discovery v3 contract](adr-source-bound-discovery-cards.md) keeps
+cards, exact evidence units and actual concepts distinct. Its fixed BM25 ranking
+reports source and discovery matches separately; it loads governed incident
+relationships on demand. The existing v1/v2 corpus contracts remain available.
+
+A logical unit is a complete declared passage, such as a definition, rule,
+exception or table. It may cross physical page boundaries. It preserves exact
+source fragments and qualifications within that boundary; it does not make
+missing concept relationships or legal review complete.
+
+A producer can attach optional `okf-evidence-unit.v1` metadata to an evidence
+record. Ask OKF shows its boundary status, completeness and exact source spans.
+The machine-readable package and compact `record_metadata` reads retain the
+same metadata. Source-span positions count UTF-8 bytes, whereas delivery slices
+count JavaScript text positions; neither is a PDF byte position.
+
+For a corpus of these records, use `okf-context-corpus.v2`. Physical `counts`
+remain a page census; `records.count` counts retrieval units independently.
+The consumer can load declared referenced destinations beyond the 16 lexical
+candidates, starting from actual resolved concepts or lexical evidence. It never
+turns an expected answer or a required destination into a search seed.
+
+Uncertain boundaries, fallback pages, absent destinations and exhausted budgets
+remain explicit. Whole units are retained or omitted, never shortened to fit.
+An author-declared boundary does not upgrade source authority or specialist
+review. Existing corpus v1 behaviour and frozen service engines are preserved.
+
+Read the [decision and producer contract](adr-logical-evidence-units.md). Validate
+v2 manifest shape offline with:
+
+```sh
+uv run --locked python scripts/check_context_assembly.py --corpus path/to/manifest.json
+```
+
+Shape validation does not check source inclusion. The producer must verify each
+span against its frozen extraction; Explorer verifies the unit's own bytes,
+joins, fragment hashes and provenance bindings without fetching those sources.
+
+## Small responses without shrinking the evidence selection
+
+**Assembly bytes** limit the complete selected package. **Delivery bytes** limit
+one tool response. Reducing the first can remove a qualification; using smaller
+responses for the second can carry the same complete selected package in parts.
+
+The optional browser page tools support this sequence:
+
+1. Call `okf_context_manifest` with `question`, `budget: {max_bytes: 524288}`
+   and `delivery_bytes: 32768`. Its catalogue is not source evidence.
+2. If `delivery.next_offset` is present, repeat that call with `offset` and the
+   returned `context_id`. Keep the question and assembly budget identical.
+3. Call `okf_read_evidence` with that `context_id`, a `section` and
+   `delivery_bytes: 32768`. Use `package` to reconstruct every field, or inspect
+   `diagnostics`, `relationships`, `record_metadata` and `record_text`. The two
+   record sections also require a selected `record_id`.
+4. For each value, follow `next_offset` to null, concatenate `data` in order and
+   verify its complete `content_sha256`. A partial slice can omit a qualification.
+
+This uses the same context shown in Ask OKF. Text, logical-unit spans, provenance,
+requirements and gaps are retained during complete reconstruction. Delivery
+pagination does not change the context identity or evidence status. A fully
+transferred `insufficient` package remains insufficient.
+
+The browser keeps at most four contexts for its currently loaded bundle. An
+expired or mismatched identity fails closed; rebuild the same context to inspect
+it again. This does not establish that a particular ChatGPT or other AI session
+has callable page tools. The remote service has separate source-admission and
+replay controls described in the [compact delivery decision](adr-compact-evidence-delivery.md).
+
+In logical-unit corpus v2 packages, identical item-local issue messages may list
+several affected IDs in one row. Every ID is retained; dependency pairs and path
+requirements remain distinct. Compare affected identities as well as row counts
+when auditing diagnostics. Existing v1 page packages are not regrouped.

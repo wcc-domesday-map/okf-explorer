@@ -1,0 +1,161 @@
+[
+  {
+    "id": "IMP-001",
+    "priority": "P0",
+    "change": "Publish Evaluation Profile v2 using the parent Foundry dependency contract.",
+    "status": "implemented-and-terminal-publication-verified",
+    "artifacts": [
+      "evaluation-foundry/schemas/okf-evaluation-profile.v2.schema.json",
+      "evaluation-foundry/fixtures/heritage-warwickshire/evaluation-profile.yaml",
+      "evaluation-foundry/fixtures/heritage-warwickshire/consumer-lock.json",
+      "scripts/check_evaluation_foundry.py"
+    ],
+    "acceptance_tests": [
+      "tests/test_evaluation_foundry_impact.py"
+    ],
+    "remaining_gate": "No terminal acceptance gate remains."
+  },
+  {
+    "id": "IMP-002",
+    "priority": "P0",
+    "change": "Add a deterministic, explainable, fail-closed impact planner.",
+    "status": "implemented-and-pr-70-verified",
+    "artifacts": [
+      "scripts/plan_evaluation_foundry_impact.py",
+      "evaluation-foundry/schemas/okf-evaluation-impact-plan.v1.schema.json",
+      "evaluation-foundry/fixtures/heritage-warwickshire/history/impact-shadow-cases.json"
+    ],
+    "acceptance_tests": [
+      "tests/test_evaluation_foundry_impact.py"
+    ],
+    "remaining_gate": "No implementation gate remains; the scheduled mutation shadow is an ongoing regression control."
+  },
+  {
+    "id": "IMP-003",
+    "priority": "P0",
+    "change": "Keep mutable observations and promotion status outside candidate roots.",
+    "status": "implemented-and-terminal-envelope-verified",
+    "artifacts": [
+      "evaluation-foundry/schemas/okf-evaluation-promotion-envelope.v1.schema.json",
+      "release-assurance/heritage-publication-envelope.json",
+      "scripts/check_promotion_envelope.py"
+    ],
+    "acceptance_tests": [
+      "tests/test_evaluation_foundry_impact.py"
+    ],
+    "remaining_gate": "No terminal promotion gate remains."
+  },
+  {
+    "id": "IMP-004",
+    "priority": "P1",
+    "change": "Split normalized-core and plane emitters with changed-only atomic writes.",
+    "status": "implemented-and-terminal-publication-verified",
+    "artifacts": [
+      "scripts/build_heritage_evaluation.py",
+      "scripts/heritage_build_io.py"
+    ],
+    "acceptance_tests": [
+      "tests/test_build_heritage_evaluation.py"
+    ],
+    "remaining_gate": "No terminal acceptance gate remains."
+  },
+  {
+    "id": "IMP-005",
+    "priority": "P1",
+    "change": "Run one adversarial microfixture per reconstructed late-finding class before large builds.",
+    "status": "implemented-and-pr-70-verified",
+    "artifacts": [
+      "evaluation-foundry/fixtures/heritage-warwickshire/adversarial/microfixtures.json",
+      "evaluation-foundry/schemas/heritage-adversarial-microfixtures.v1.schema.json",
+      "scripts/check_heritage_adversarial.py",
+      ".github/workflows/okf-explorer-ci.yml",
+      ".github/workflows/pages.yml",
+      ".github/workflows/foundry-full-shadow.yml"
+    ],
+    "acceptance_tests": [
+      "tests/test_heritage_adversarial.py",
+      "tests/test_ci_publication_topology.py"
+    ],
+    "remaining_gate": "Nightly shadow evidence remains independent of the verified pull-request gate."
+  },
+  {
+    "id": "IMP-006",
+    "priority": "P1",
+    "change": "Drive conditional parallel CI from the impact plan and retain a full shadow audit.",
+    "status": "implemented-and-pr-70-verified",
+    "artifacts": [
+      ".github/workflows/okf-explorer-ci.yml",
+      ".github/workflows/foundry-full-shadow.yml"
+    ],
+    "acceptance_tests": [
+      "tests/test_evaluation_foundry_impact.py",
+      "tests/test_ci_publication_topology.py"
+    ],
+    "remaining_gate": "Nightly shadow evidence remains independent of the verified pull-request gate."
+  },
+  {
+    "id": "IMP-007",
+    "priority": "P1",
+    "change": "Assemble the Site from content-addressed components.",
+    "status": "implemented-and-terminal-publication-verified",
+    "artifacts": [
+      "scripts/site_component_cache.py",
+      "scripts/build_site.py",
+      ".github/workflows/pages.yml"
+    ],
+    "acceptance_tests": [
+      "tests/test_site_component_cache.py",
+      "tests/test_build_site.py"
+    ],
+    "remaining_gate": "No terminal acceptance gate remains."
+  },
+  {
+    "id": "IMP-008",
+    "priority": "P2",
+    "change": "Hash-shard semantic and link-intent outputs and remove the duplicate graph materialization.",
+    "status": "implemented-and-terminal-link-closure-verified",
+    "artifacts": [
+      "scripts/build_heritage_evaluation.py",
+      "scripts/observe_link_intents.py",
+      ".github/workflows/link-observation.yml"
+    ],
+    "acceptance_tests": [
+      "tests/test_build_heritage_evaluation.py",
+      "tests/test_observe_link_intents.py"
+    ],
+    "remaining_gate": "Scheduled freshness observations continue independently after promotion."
+  },
+  {
+    "id": "IMP-009",
+    "priority": "P2",
+    "change": "Move the large heritage pack to an independently rooted publication unit.",
+    "status": "implemented-and-external-promotion-verified",
+    "artifacts": [
+      "publication-units/heritage-coventry-warwickshire/publication-unit.json",
+      "scripts/export_publication_unit.py",
+      "publication-units/heritage-coventry-warwickshire/repository-template/pages.yml",
+      "release-assurance/heritage-postmortem-publication-evidence.json"
+    ],
+    "acceptance_tests": [
+      "tests/test_publication_units.py"
+    ],
+    "remaining_gate": "No terminal publication gate remains."
+  },
+  {
+    "id": "IMP-010",
+    "priority": "P2",
+    "change": "Require annotated tags, attestation, immutable releases and retained deterministic archives.",
+    "status": "implemented-and-terminal-release-verified",
+    "artifacts": [
+      "release-assurance/release-policy.json",
+      "scripts/check_release_policy.py",
+      "publication-units/heritage-coventry-warwickshire/repository-template/promotion-release.yml",
+      "release-assurance/heritage-postmortem-publication-evidence.json"
+    ],
+    "acceptance_tests": [
+      "tests/test_release_policy.py",
+      "tests/test_ci_publication_topology.py"
+    ],
+    "remaining_gate": "No terminal release-integrity gate remains."
+  }
+]

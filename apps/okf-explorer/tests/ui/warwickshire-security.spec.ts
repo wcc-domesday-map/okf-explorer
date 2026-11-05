@@ -62,7 +62,7 @@ async function openDefaultBundle(page: Page) {
     bundleRequests += 1;
     await json(route, safeBundle);
   });
-  const response = await page.goto('/');
+  const response = await page.goto('/explore/?bundle=../okf/warwickshire-public/okf-bundle.json');
   await expect(page.getByText('Warwickshire Public Knowledge', { exact: true }).first()).toBeVisible();
   expect(bundleRequests).toBe(1);
   return response;
@@ -75,7 +75,7 @@ test('loads the Warwickshire same-origin default and preserves the core small-bu
   await expect(page.getByRole('heading', { name: 'School admissions' }).first()).toBeVisible();
 
   await views.getByRole('button', { name: 'Graph', exact: true }).click();
-  await expect(page.getByRole('img', { name: 'OKF graph' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /School admissions → uses → School locations/ }).first()).toHaveCount(1);
 
   await views.getByRole('button', { name: 'Links', exact: true }).click();
   await expect(page.getByRole('button', { name: /School admissions.*uses.*School locations/ })).toBeVisible();
@@ -100,17 +100,18 @@ test('rejects cross-origin, javascript and data bundle query values before any a
     'javascript:alert(1)',
     'data:application/json,%7B%7D'
   ]) {
-    await page.goto(`/?bundle=${encodeURIComponent(value)}`);
-    await expect(page.getByText(/must be an http\(s\) URL on this Explorer origin/)).toBeVisible();
+    await page.goto(`/explore/?bundle=${encodeURIComponent(value)}`);
+    await expect(page.getByRole('alert')).toContainText(/same-origin paths|on this Explorer origin/);
   }
   expect(attackerRequests).toBe(0);
 });
 
 test('renders FOI provenance and resolves bundle-relative evidence against the bundle URL', async ({ page }) => {
   await openDefaultBundle(page);
+  await expect(page.getByText('Reviewed public source.', { exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Data', exact: true }).click();
 
   for (const value of [
-    'Resource',
     'Source URL',
     'Source ID',
     'Source record ID',
@@ -122,23 +123,22 @@ test('renders FOI provenance and resolves bundle-relative evidence against the b
     'Confidence',
     'Method',
     'Facts',
-    'Notes',
-    'Body'
+    'Notes'
   ]) {
     await expect(page.getByText(value, { exact: true }).last()).toBeVisible();
   }
   await expect(page.getByText('SOURCE-WCC-WEB-2026-07-16', { exact: true }).last()).toBeVisible();
   await expect(page.getByText('wcc:/school-admissions', { exact: true })).toBeVisible();
   await expect(page.getByText('2026-07-16T14:15:00Z', { exact: true }).last()).toBeVisible();
-  await expect(page.getByText('Education', { exact: true })).toBeVisible();
-  await expect(page.getByText('Check the current admissions timetable before relying on this record.', { exact: true })).toBeVisible();
-  await expect(page.getByText(/Reviewed public source/)).toBeVisible();
+  await expect(page.getByRole('definition').filter({ hasText: 'Education' })).toBeVisible();
+  await expect(page.getByRole('definition').filter({ hasText: 'Check the current admissions timetable before relying on this record.' })).toBeVisible();
+  await page.getByRole('tab', { name: 'Evidence', exact: true }).click();
 
-  const relativeResource = page.getByRole('link', { name: /resources\/school-admissions\.html/ });
+  const relativeResource = page.getByRole('link', { name: 'Resource ↗' });
   await expect(relativeResource).toHaveAttribute('href', `${APP_ORIGIN}/okf/warwickshire-public/resources/school-admissions.html`);
-  const relativeSource = page.getByRole('link', { name: /services\/school-admissions\.md/ }).first();
+  const relativeSource = page.getByRole('link', { name: 'Source ↗', exact: true });
   await expect(relativeSource).toHaveAttribute('href', `${APP_ORIGIN}/okf/warwickshire-public/services/school-admissions.md`);
-  await expect(page.getByRole('link', { name: /www\.warwickshire\.gov\.uk\/school-admissions/ })).toHaveAttribute(
+  await expect(page.getByRole('link', { name: 'Source URL ↗' })).toHaveAttribute(
     'href',
     'https://www.warwickshire.gov.uk/school-admissions'
   );
@@ -152,10 +152,12 @@ test('renders FOI provenance and resolves bundle-relative evidence against the b
   );
 
   await page.getByRole('navigation', { name: 'Views' }).getByRole('button', { name: 'Reader', exact: true }).click();
-  await page.locator('.reader-view .node-card').filter({ hasText: 'Unsafe link fixture' }).click();
-  await expect(page.getByText('javascript:alert(1)', { exact: true })).toBeVisible();
-  await expect(page.getByText('data:text/html,unsafe', { exact: true })).toBeVisible();
-  await expect(page.getByText('//attacker.example/rights', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: /Test record Unsafe link fixture/ }).click();
+  await page.getByRole('tab', { name: 'Data', exact: true }).click();
+  await page.getByText('Node JSON and provenance').click();
+  await expect(page.getByText(/javascript:alert\(1\)/).last()).toBeVisible();
+  await expect(page.getByText(/data:text\/html,unsafe/).last()).toBeVisible();
+  await expect(page.getByText(/\/\/attacker\.example\/rights/).last()).toBeVisible();
   await expect(page.locator('a[href^="javascript:"], a[href^="data:"], a[href^="//attacker.example"]')).toHaveCount(0);
 });
 
@@ -181,7 +183,7 @@ test('keeps safe external map links but disables external on-demand previews', a
     });
   });
 
-  await page.goto('/?view=map');
+  await page.goto('/explore/?bundle=../okf/warwickshire-public/okf-bundle.json&view=map');
   await expect(page.getByRole('heading', { name: 'Map & geography' })).toBeVisible();
   const disabled = page.getByRole('button', { name: 'External preview disabled' });
   await expect(disabled).toBeVisible();

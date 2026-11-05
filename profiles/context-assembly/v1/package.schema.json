@@ -1,0 +1,698 @@
+{
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "okf-governed-context.v1"
+    },
+    "context_id": {
+      "type": "string",
+      "pattern": "^urn:sha256:[a-f0-9]{64}$"
+    },
+    "engine": {
+      "const": "okf-context-assembly.v1"
+    },
+    "question": {
+      "type": "string"
+    },
+    "bundle": {
+      "$ref": "common.schema.json#/$defs/bundle"
+    },
+    "binding": {
+      "type": "object",
+      "properties": {
+        "index_url": {
+          "type": "string"
+        },
+        "index_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "index_url",
+        "index_sha256"
+      ],
+      "additionalProperties": false
+    },
+    "scope": {
+      "type": "string"
+    },
+    "evidence_status": {
+      "enum": [
+        "sufficient",
+        "insufficient",
+        "conflicting"
+      ]
+    },
+    "resolved_concepts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "label": {
+            "type": "string"
+          },
+          "matched": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "method": {
+            "const": "declared-phrase"
+          },
+          "confidence": {
+            "const": "exact-alias"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "matched",
+          "method",
+          "confidence"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "ambiguities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "phrase": {
+            "type": "string"
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "required": [
+          "phrase",
+          "candidates"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "unresolved_terms": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "selected": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "record": {
+            "$ref": "common.schema.json#/$defs/record"
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "paths": {
+            "type": "array",
+            "items": {
+              "$ref": "common.schema.json#/$defs/path"
+            }
+          }
+        },
+        "required": [
+          "record",
+          "reasons",
+          "paths"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "relationships": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/assertion"
+      }
+    },
+    "requirements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "label": {
+            "type": "string"
+          },
+          "when_all": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "scope": {
+            "type": "string"
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "enum": [
+              "supported-within-declared-scope",
+              "insufficient"
+            ]
+          },
+          "missing": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "covers": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required_paths": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "common.schema.json#/$defs/path"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "when_all",
+          "required",
+          "scope",
+          "status",
+          "missing"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "missing_evidence": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/issue"
+      }
+    },
+    "conflicts": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/issue"
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "budget": {
+      "type": "object",
+      "properties": {
+        "max_nodes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "max_relationships": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "max_depth": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8
+        },
+        "max_bytes": {
+          "type": "integer",
+          "minimum": 8192,
+          "maximum": 524288
+        },
+        "used_nodes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "used_relationships": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "used_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reached_depth": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "omissions": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/issue"
+          }
+        }
+      },
+      "required": [
+        "max_nodes",
+        "max_relationships",
+        "max_depth",
+        "max_bytes",
+        "used_nodes",
+        "used_relationships",
+        "used_bytes",
+        "reached_depth",
+        "truncated",
+        "omissions"
+      ],
+      "additionalProperties": false
+    },
+    "ai_answer": {
+      "type": "null"
+    },
+    "retrieval": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "enum": [
+            "indexed-lexical-candidates.v1",
+            "source-bound-discovery-bm25.v1"
+          ]
+        },
+        "corpus_records": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "corpus_pages": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "empty_pages": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "candidate_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fetched_files": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fetched_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "decoded_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "query_tokens": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "omitted_query_tokens": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "candidates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "matched": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "score": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "alias_phrase": { "type": "string" },
+              "alias_pattern_id": { "type": "string" },
+              "matched_groups": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            },
+            "required": [
+              "id",
+              "matched",
+              "score"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "limits": {
+          "type": "object",
+          "properties": {
+            "query_tokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "candidates": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "files": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "fetched_bytes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "decoded_bytes": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "query_tokens",
+            "candidates",
+            "files",
+            "fetched_bytes",
+            "decoded_bytes"
+          ],
+          "additionalProperties": false
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "omissions": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/issue"
+          }
+        },
+        "units": {
+          "type": "object",
+          "properties": {
+            "corpus_schema": {
+              "enum": [
+                "okf-context-corpus.v2",
+                "okf-context-corpus.v3"
+              ]
+            },
+            "referenced_records": {
+              "type": "array",
+              "maxItems": 200,
+              "uniqueItems": true,
+              "items": {
+                "type": "string"
+              }
+            },
+            "examined_relationships": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2000
+            },
+            "limits": {
+              "type": "object",
+              "properties": {
+                "referenced_records": {
+                  "const": 200
+                },
+                "examined_relationships": {
+                  "const": 2000
+                }
+              },
+              "required": [
+                "referenced_records",
+                "examined_relationships"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "corpus_schema",
+            "referenced_records",
+            "examined_relationships",
+            "limits"
+          ],
+          "additionalProperties": false
+        },
+        "discovery": {
+          "type": "object",
+          "properties": {
+            "ranking": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "schema": { "const": "okf-bm25.v1" },
+                    "k1": { "const": 1.2 },
+                    "b": { "const": 0.75 },
+                    "score_scale": { "const": 1000000 },
+                    "fields": { "const": ["source", "discovery"] }
+                  },
+                  "required": ["schema", "k1", "b", "score_scale", "fields"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "schema": { "const": "okf-bm25-weighted.v2" },
+                    "k1": { "const": 1.2 },
+                    "b": { "const": 0.75 },
+                    "score_scale": { "const": 1000000 },
+                    "fields": { "const": ["source", "discovery"] },
+                    "weights": {
+                      "type": "object",
+                      "properties": { "source": { "const": 1 }, "discovery": { "const": 2 } },
+                      "required": ["source", "discovery"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["schema", "k1", "b", "score_scale", "fields", "weights"],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "limits": {
+              "type": "object",
+              "properties": {
+                "posting_rows": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "ranking_records": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "path_prefixes": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 2000
+                },
+                "alias_routes": { "const": 2000 },
+                "pattern_routes": { "const": 128 },
+                "alias_query_tokens": { "const": 64 },
+                "matched_alias_routes": { "const": 4 }
+              },
+              "required": [
+                "posting_rows",
+                "ranking_records"
+              ],
+              "additionalProperties": false
+            },
+            "candidates": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "card": {
+                    "oneOf": [
+                      {
+                        "$ref": "common.schema.json#/$defs/discovery_card"
+                      },
+                      {
+                        "$ref": "common.schema.json#/$defs/discovery_card_reference"
+                      }
+                    ]
+                  },
+                  "source_score": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "discovery_score": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "matched_source": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "matched_discovery": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "alias_phrase": { "type": "string" },
+                  "alias_pattern_id": { "type": "string" },
+                  "matched_groups": {
+                    "type": "array",
+                    "items": { "type": "string" }
+                  }
+                },
+                "required": [
+                  "card",
+                  "source_score",
+                  "discovery_score",
+                  "matched_source",
+                  "matched_discovery"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "adjacency": {
+              "type": "array",
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "outgoing_ids": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "incoming_ids": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "outgoing_ids",
+                      "incoming_ids"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "$ref": "common.schema.json#/$defs/discovery_incident_reference"
+                  }
+                ]
+              }
+            },
+            "admission_order": {
+              "enum": [
+                "resolved-concept-paths-before-lexical-candidates.v1",
+                "lexical-anchor-then-resolved-concept-paths.v1",
+                "lexical-anchor-then-declared-path-prefixes.v1",
+                "lexical-anchor-dependencies-before-concept-paths.v2"
+              ]
+            }
+          },
+          "required": [
+            "ranking",
+            "limits",
+            "candidates",
+            "adjacency"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "method",
+        "corpus_records",
+        "corpus_pages",
+        "empty_pages",
+        "candidate_count",
+        "fetched_files",
+        "fetched_bytes",
+        "decoded_bytes",
+        "query_tokens",
+        "omitted_query_tokens",
+        "candidates",
+        "limits",
+        "truncated",
+        "omissions"
+      ],
+      "additionalProperties": false
+    },
+    "routing_guards": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 30000,
+      "items": {
+        "$ref": "common.schema.json#/$defs/context_guard_decision"
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "context_id",
+    "engine",
+    "question",
+    "bundle",
+    "binding",
+    "scope",
+    "evidence_status",
+    "resolved_concepts",
+    "ambiguities",
+    "unresolved_terms",
+    "selected",
+    "relationships",
+    "requirements",
+    "missing_evidence",
+    "conflicts",
+    "limitations",
+    "budget",
+    "ai_answer"
+  ],
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chris-page-gov.github.io/okf-explorer/profiles/context-assembly/v1/package.schema.json",
+  "title": "Governed context package v1"
+}

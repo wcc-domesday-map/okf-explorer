@@ -1,0 +1,147 @@
+<script lang="ts">
+  import { facetColour, HIGHLIGHT_COLOUR, TRACK_COLOUR } from '$lib/viewer/facetColours';
+  import { classificationMethodLabels, type FacetClassification } from '$lib/viewer/facetClassification';
+  export type FacetModel = { key: string; label: string; description?: string; pinned?: boolean; open?: boolean;
+    classification?: FacetClassification;
+    rows: { value: string; label: string; count: number; highlighted?: number }[]; exact?: boolean };
+  let { facets, selection, multiple = $bindable(false), busy = false, onopen, onpin, onpreview, onpreviewsummary, onkeep, onmove, onhide }:
+    { facets: FacetModel[]; selection: Record<string, string[]>; multiple?: boolean; busy?: boolean;
+      onopen: (key: string) => void; onpin: (key: string) => void;
+      onpreview: (key: string, value: string, additive: boolean) => void;
+      onpreviewsummary: (key: string, value: string, additive: boolean) => void;
+      onkeep: (key: string, value: string, restoreSelection?: boolean) => void; onmove?: (key: string, direction: -1 | 1) => void;
+      onhide?: (key: string) => void } = $props();
+  let searches = $state<Record<string, string>>({});
+  let limits = $state<Record<string, number>>({});
+  function segments(rows: FacetModel['rows']) {
+    const positive = rows.filter(row => row.count);
+    const tail = positive.slice(16);
+    return tail.length ? [...positive.slice(0, 16), { other: true, value: '__other', label: `${tail.length} other values`, count: tail.reduce((sum, row) => sum + row.count, 0), highlighted: tail.every(row => row.highlighted !== undefined) ? tail.reduce((sum, row) => sum + (row.highlighted || 0), 0) : undefined }] : positive;
+  }
+  function choose(event: MouseEvent, key: string, value: string) {
+    // The second click of a double click must not toggle an additive value again.
+    if (event.detail < 2) onpreview(key, value, multiple || event.ctrlKey || event.metaKey || event.shiftKey);
+  }
+  function closeColourControls(event: KeyboardEvent) {
+    if (event.key !== 'Escape') return;
+    const details = (event.currentTarget as HTMLElement).closest('details');
+    if (details) { details.open = false; details.querySelector('summary')?.focus(); event.preventDefault(); }
+  }
+</script>
+
+<div class="facet-instructions">
+  <label><input type="checkbox" bind:checked={multiple} /> Select multiple values</label>
+  <details><summary>How selection works</summary><p>Click to highlight and bring matches to the top. Click a selected value again to remove it. An unselected value replaces the selection in that facet. Hold Ctrl or Command, or enable multiple selection, to select values joined by “or”. Different facets are joined by “and”. Double-click to keep highlighted records. Keyboard: Enter highlights; Alt+Enter keeps.</p><p class="bar-legend">Bar widths show the relative counts, including any grouped other values. Open the colour controls to highlight a value while keeping the facet folded. The lower black track shows highlighted matches. Open a facet for labelled counts and every value; values can overlap.</p></details>
+</div>
+<div class="facet-sections" role="group" aria-label="Facet filters">
+  {#each facets as facet (facet.key)}
+    {@const chosen = selection[facet.key] || []}
+    {@const total = facet.rows.reduce((sum, row) => sum + row.count, 0)}
+    {@const rows = facet.rows.filter(row => row.label.toLocaleLowerCase('en-GB').includes((searches[facet.key] || '').toLocaleLowerCase('en-GB')))}
+    <section class="facet-section" class:open={facet.open} class:pinned={facet.pinned} data-facet-key={facet.key} aria-label={`${facet.label} facet`}>
+      <div class="facet-header">
+        <button class="facet-toggle" aria-expanded={facet.open} aria-controls={`facet-values-${facet.key}`} onclick={() => onopen(facet.key)}><span class="facet-heading-label"><strong>{facet.label}</strong><span class="selection-summary" title={chosen.map(value => facet.rows.find(row => row.value === value)?.label || value).join(' or ')}>{chosen.map(value => facet.rows.find(row => row.value === value)?.label || value).join(' or ') || '\u00a0'}</span></span><small>{facet.rows.length} values</small></button>
+        <details class="facet-quick-values" name="facet-colour-controls"><summary aria-label={`Colour controls for ${facet.label}`} title={`Colour controls for ${facet.label}`} onkeydown={closeColourControls}><span class="colour-control-icon" aria-hidden="true"><i></i><i></i><i></i><i></i></span></summary><div class="quick-grid" role="group" aria-label={`${facet.label} numbered colour controls`}>
+          {#each segments(facet.rows) as row, index}
+            {@const other = 'other' in row && row.other}
+            <button type="button" class="quick-value" data-facet-colour={other ? undefined : row.value}
+              aria-label={`${other ? '… Open facet for ' : `${index + 1}: `}${row.label}: ${row.highlighted ?? 'unknown'} highlighted / ${row.count} in scope${facet.exact === false ? ' (partial counts)' : ''}`}
+              aria-pressed={other ? undefined : chosen.includes(row.value)}
+              title={`${row.label}: ${row.highlighted ?? '—'} highlighted / ${row.count} in scope`}
+              onclick={(event) => { if (other) { if (!facet.open) onopen(facet.key); } else if (event.detail < 2) onpreviewsummary(facet.key, row.value, multiple || event.ctrlKey || event.metaKey || event.shiftKey); }}
+              ondblclick={() => { if (!other) onkeep(facet.key, row.value, true); }}
+              onkeydown={(event) => { if (event.key === 'Escape') closeColourControls(event); else if (!other && event.key === 'Enter') { event.preventDefault(); if (event.altKey) onkeep(facet.key, row.value); else onpreviewsummary(facet.key, row.value, multiple || event.ctrlKey || event.metaKey || event.shiftKey); } }}>
+              <span class="quick-swatch" style={`background:${facetColour(index)}`} aria-hidden="true"></span><span>{other ? '…' : index + 1}</span>
+            </button>
+          {/each}
+        </div></details>
+        <button aria-label={`${facet.pinned ? 'Unpin' : 'Pin'} ${facet.label}`} aria-pressed={facet.pinned || false} onclick={() => onpin(facet.key)}>{facet.pinned ? '★' : '☆'}</button>
+        {#if onmove || onhide}<details class="facet-options"><summary aria-label={`Options for ${facet.label}`}>⋯</summary><div>
+          {#if onmove}<button onclick={() => onmove?.(facet.key, -1)}>Move up</button><button onclick={() => onmove?.(facet.key, 1)}>Move down</button>{/if}
+          {#if onhide}<button onclick={() => onhide?.(facet.key)}>Hide facet</button>{/if}
+        </div></details>{/if}
+      </div>
+      <div class="facet-distribution" role="group" aria-label={`${facet.label} colour selections${facet.exact === false ? ' (partial counts)' : ''}`}>
+        <div class="proportional-bar" role="img" aria-label={`${facet.label} proportional counts${facet.exact === false ? ' (partial counts)' : ''}`}>
+        {#each segments(facet.rows) as row, index}
+          {@const other = 'other' in row && row.other}
+          <span class="bar-segment" aria-hidden="true"
+            style={`flex-grow:${row.count};--bar-colour:${facetColour(index)};--highlight-colour:${HIGHLIGHT_COLOUR};--track-colour:${TRACK_COLOUR}`}>
+            {#if !other && chosen.includes(row.value)}<span class="bar-selected" aria-hidden="true">✓</span>{/if}
+            <span class="highlight-track" class:unknown={row.highlighted === undefined} aria-hidden="true">{#if row.highlighted === undefined}<span class="unknown-count">?</span>{:else}<span class="highlight-share" style={`width:${row.count ? row.highlighted / row.count * 100 : 0}%`}></span>{/if}</span>
+          </span>
+        {/each}
+        {#if !total}<span class="zero-bar">No members in this scope</span>{/if}
+        </div>
+      </div>
+      {#if facet.open}
+        <div id={`facet-values-${facet.key}`} class="facet-values">
+          {#if facet.description}<p>{facet.description}</p>{/if}
+          {#if facet.classification}
+            <div class="classification-note" role="note" aria-label={`${facet.label} classification evidence`}>
+              <strong>Producer-declared classification · {facet.classification.review_status.replaceAll('-', ' ')}</strong>
+              <p>{classificationMethodLabels(facet.classification).join(' · ') || 'Method not supplied'}</p>
+              <p>{facet.classification.classified_records.toLocaleString('en-GB')} of {facet.classification.total_records.toLocaleString('en-GB')} records classified in the whole snapshot. Missing classification does not establish that a topic is absent.</p>
+              {#each facet.classification.limitations as limitation}<p>{limitation}</p>{/each}
+            </div>
+          {/if}
+          {#if facet.rows.length > 12}<input aria-label={`Find values in ${facet.label}`} placeholder="Find a value" value={searches[facet.key] || ''} oninput={(event) => searches = { ...searches, [facet.key]: event.currentTarget.value }} />{/if}
+          <small class="count-key">Highlighted / in scope{facet.exact === false ? ' · partial counts' : ''}</small>
+          {#each rows.slice(0, limits[facet.key] || 40) as row (row.value)}
+            <button class="facet-value" data-facet-value={row.value} class:highlighted={chosen.includes(row.value)} aria-pressed={chosen.includes(row.value)} onclick={(event) => choose(event, facet.key, row.value)} ondblclick={() => onkeep(facet.key, row.value, true)} onkeydown={(event) => { if (event.key === 'Enter') { event.preventDefault(); if (event.altKey) onkeep(facet.key, row.value); else onpreview(facet.key, row.value, multiple || event.ctrlKey || event.metaKey || event.shiftKey); } }}>
+              <span>{#if chosen.includes(row.value)}<span aria-hidden="true">✓ </span>{/if}{row.label}{#if chosen.includes(row.value)}<span class="selection-word"> · Highlighted</span>{/if}</span><small>{row.highlighted ?? '—'} / {row.count.toLocaleString('en-GB')}</small>
+            </button>
+          {/each}
+          {#if rows.length > (limits[facet.key] || 40)}<button onclick={() => limits = { ...limits, [facet.key]: (limits[facet.key] || 40) + 80 }}>Show more values</button>{/if}
+          {#if !rows.length}<p>No values match.</p>{/if}
+        </div>
+      {/if}
+    </section>
+  {/each}
+</div>
+
+<style>
+  .facet-instructions { display:flex; align-items:start; flex-wrap:wrap; gap:2px 8px; font-size:.8rem; margin:4px 0; } .facet-instructions label { display:flex; gap:6px; align-items:center; min-height:28px; } .facet-instructions details { margin:0; } .facet-instructions details[open] { flex-basis:100%; }
+  .facet-instructions summary { display:flex; align-items:center; min-height:28px; cursor:pointer; } .facet-instructions p { margin:4px 0 8px; line-height:1.4; }
+  .facet-instructions summary::before { content:'▸'; margin-right:4px; } .facet-instructions details[open] summary::before { content:'▾'; }
+  .facet-sections { gap:4px; }
+  .facet-section { margin:0; border:1px solid #9fb4ca; border-left:4px solid #0068bc; border-radius:6px; background:white; overflow:visible; }
+  .facet-header { position:relative; display:flex; align-items:center; gap:3px; padding:2px 3px; } .facet-header button { min-height:36px; padding:5px; }
+  .facet-toggle { flex:1; display:flex; gap:6px; align-items:center; justify-content:space-between; min-width:0; border:0; text-align:left; } .facet-toggle strong { overflow:hidden; text-overflow:ellipsis; }
+  .facet-toggle small { font-size:.7rem; white-space:nowrap; }
+  .facet-heading-label { display:grid; grid-template-rows:18px 12px; min-width:0; }
+  .facet-heading-label strong { line-height:18px; }
+  .facet-heading-label .selection-summary { display:block; min-width:0; height:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; line-height:12px; font-weight:600; }
+  .facet-header .facet-toggle { padding:3px 5px; }
+  .bar-legend { font-size:.75rem; line-height:1.4; color:#243746; } .selection-word { font-size:.75rem; }
+  .facet-distribution { width:calc(100% - 8px); margin:0 4px 4px; padding:0; background:#ffffff; }
+  .proportional-bar { display:flex; width:100%; height:12px; overflow:hidden; }
+  .bar-segment { flex-basis:0; min-width:0; background:var(--bar-colour); position:relative; height:12px; }
+  .facet-quick-values { margin:0; padding:0; border:0; }
+  .facet-quick-values summary { display:flex; align-items:center; justify-content:center; min-width:36px; min-height:36px; padding:4px; border:1px solid #315a72; border-radius:4px; cursor:pointer; list-style:none; }
+  .facet-quick-values summary::-webkit-details-marker { display:none; }
+  .colour-control-icon { display:grid; grid-template-columns:repeat(2,6px); gap:1px; padding:2px; border:1px solid currentColor; }
+  .colour-control-icon i { width:6px; height:6px; background:#005a9c; }
+  .colour-control-icon i:nth-child(2) { background:#ffdd00; } .colour-control-icon i:nth-child(3) { background:#2b174a; } .colour-control-icon i:nth-child(4) { background:#b8dce7; }
+  .facet-quick-values summary:focus-visible { outline:3px solid #0b0c0c; outline-offset:2px; }
+  .quick-grid { position:absolute; inset-inline:3px; top:100%; z-index:6; display:flex; flex-wrap:wrap; gap:6px; padding:8px; border:1px solid #315a72; border-radius:4px; background:#fff; box-shadow:0 3px 10px #0002; }
+  .quick-value { display:flex; align-items:center; justify-content:center; gap:3px; min-width:34px; min-height:34px; padding:3px; border:1px solid #315a72; background:#fff; color:#0b0c0c; font-size:.8rem; font-weight:700; }
+  .quick-value[aria-pressed=true] { background:#ffdd00; }
+  .quick-value:focus-visible { outline:3px solid #0b0c0c; outline-offset:2px; z-index:1; }
+  .quick-swatch { width:12px; height:12px; flex:none; border:1px solid #0b0c0c; }
+  .bar-selected { position:absolute; top:1px; left:50%; transform:translateX(-50%); width:5px; height:5px; border-radius:50%; background:white; border:1px solid #0b0c0c; font-size:0; line-height:0; }
+  .highlight-track { position:absolute; left:0; bottom:0; width:100%; height:4px; background:var(--track-colour); border-top:1px solid var(--highlight-colour); }
+  .highlight-share { display:block; height:100%; background:var(--highlight-colour); }
+  .unknown-count { display:none; }
+  .highlight-track.unknown { border-top-style:dashed; }
+  @media (forced-colors: active) { .bar-segment { border:1px solid CanvasText; } .highlight-track { background:Canvas; } .highlight-share { background:Highlight; forced-color-adjust:none; } }
+  .zero-bar { font-size:.65rem; } .facet-values { padding:6px; display:grid; gap:5px; }
+  .facet-values p { margin:0 0 5px; font-size:.8rem; } .facet-values input { width:100%; min-width:0; }
+  .classification-note { border-left:3px solid #806000; background:#fff9df; padding:8px; font-size:.8rem; }
+  .facet-value { display:flex; justify-content:space-between; align-items:center; gap:8px; text-align:left; min-height:40px; padding:6px 8px; }
+  .facet-value small { white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .facet-value.highlighted { background:#fff4b8; border-color:#665400; box-shadow:inset 4px 0 #665400; }
+  .count-key { text-align:right; font-size:.72rem; color:#43566a; }
+  .facet-options { position:relative; } .facet-options summary { cursor:pointer; padding:8px; list-style:none; }
+  .facet-options div { position:absolute; right:0; z-index:5; background:white; border:1px solid #9fb4ca; box-shadow:0 3px 10px #0002; min-width:140px; display:grid; }
+</style>

@@ -9,7 +9,7 @@ function safeEntry(entry: BundleRegistryEntry, baseUrl: string): BundleRegistryE
   return url ? { ...entry, url } : null;
 }
 
-export function loadHistory(baseUrl: string): BundleRegistryEntry[] {
+export function loadHistory(baseUrl = globalThis.location?.href || 'https://example.test/'): BundleRegistryEntry[] {
   try {
     const parsed = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]') as BundleRegistryEntry[];
     return Array.isArray(parsed)
@@ -20,7 +20,7 @@ export function loadHistory(baseUrl: string): BundleRegistryEntry[] {
   }
 }
 
-export function rememberHistory(entry: BundleRegistryEntry, baseUrl: string): BundleRegistryEntry[] {
+export function rememberHistory(entry: BundleRegistryEntry, baseUrl = globalThis.location?.href || 'https://example.test/'): BundleRegistryEntry[] {
   const safe = safeEntry(entry, baseUrl);
   const history = loadHistory(baseUrl);
   if (!safe) return history;
@@ -33,7 +33,7 @@ export function rememberHistory(entry: BundleRegistryEntry, baseUrl: string): Bu
   return next;
 }
 
-export async function loadRegistry(url: string, baseUrl: string): Promise<BundleRegistryEntry[]> {
+export async function loadRegistry(url: string, baseUrl = globalThis.location?.href || 'https://example.test/'): Promise<BundleRegistryEntry[]> {
   try {
     const registryUrl = requireSameOriginHttpUrl(url, baseUrl, 'Bundle registry URL');
     const registry = await fetchJson<{ bundles?: BundleRegistryEntry[]; entries?: BundleRegistryEntry[] }>(registryUrl);

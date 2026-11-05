@@ -1,5 +1,14 @@
 # UK Legislation OKF
 
+This architecture document describes the stable UK Legislation and Whole-Law
+v0.4.0 publications dated 3 November 2026. Their source snapshots remain
+`legislation-work-index-2026-07-11T18:00:00Z` and `whole-law-2026-07-25`;
+publication date is not source-currency date. Consult the
+[producer](https://github.com/chris-page-gov/okf-uk-legislation) for the exact
+release identity. Explorer-local generator commands describe compatibility
+material, not authority to refresh the independent production corpus.
+
+
 This is the architecture and data-model volume of the [UK Legislation documentation spine](uk-legislation/index.md). For task guidance use [Getting started](uk-legislation/getting-started.md); for worked interfaces use the [illustrated manual](uk-legislation/illustrated-manual.md).
 
 ## Public viewer
@@ -10,18 +19,33 @@ The canonical bundle descriptor is `https://chris-page-gov.github.io/okf-uk-legi
 
 Work and search-result chunks use deterministic gzip files. The Explorer streams and decompresses only the requested chunks in the browser; manifests, facets, ontology pages and search shards remain directly inspectable. This keeps the complete publication within practical GitHub/Pages limits without dropping records.
 
+The semantic publication is intentionally small. The root legislation
+publication has YAML-LD and JSON-LD semantic overview documents; the Whole-Law
+federation additionally publishes a Turtle projection. The 365,786-work
+operational corpus and its relationship assertions remain chunked JSON rather
+than being duplicated into one monolithic RDF file. Those JSON assertions are
+still machine-readable semantic data: they retain stable routes, predicates,
+authority, derivation and evidence, and an agent can traverse them through the
+published search and adjacency manifests.
+
+The root and Whole-Law descriptors, YAML-LD and JSON-LD representations now
+identify release `0.4.0`; Whole-Law also publishes Turtle. The separately
+declared `okf_version` remains `0.2`, because that is the format specification,
+not the publication version. The operational corpus stays in digest-bound
+chunked JSON rather than one impractical monolithic RDF document.
+
 ## What “complete” means
 
 The generator first reads the `/all/data.feed` facets, then retrieves every year with `results-count=10000` and checks that each response count exactly equals the official year-facet count. It separately retrieves `/draft/data.feed`. Work IDs are deduplicated by the official `/id/{type}/{year}/{number}` identifier. The corpus validator requires at least 300,000 unique works and representative primary, secondary, devolved and EU-origin type codes.
 
-For each selected work, the browser obtains the official `application/xml` manifestation and walks every recognized CLML structural element:
+For each selected work, the browser obtains the official `application/xml` manifestation and walks every recognised CLML structural element:
 
 - preliminaries, Body and EUBody;
 - Group, Part, Chapter, Division, Title, Section and Subsection containers;
 - Pblock, PsubBlock, P1group-P3group and P1-P7 nested provisions;
 - Schedules, Schedule, Appendix, Annex, Attachments and explanatory/signed sections.
 
-Each node retains the CLML element name and ID, receives a normalized human type such as Section, Article, Regulation, Rule or Paragraph where the ID supports it, records number/title/text/extent/status, retains its parent/depth and links to the official selected passage. This is progressive completeness: discovery metadata is local; authoritative text is fetched only for the work being researched.
+Each node retains the CLML element name and ID, receives a normalised human type such as Section, Article, Regulation, Rule or Paragraph where the ID supports it, records number/title/text/extent/status, retains its parent/depth and links to the official selected passage. This is progressive completeness: discovery metadata is local; authoritative text is fetched only for the work being researched.
 
 ## Ontology decision
 
@@ -37,7 +61,7 @@ No single vocabulary covers identity, versions, manifestations, subdivisions and
 
 ELI is the primary semantic spine. Schema.org is a compatibility layer, not a replacement for ELI or CLML. CLML is authoritative for UK subdivision shape. The official [ELI-to-Schema.org mapping](https://op.europa.eu/documents/3938058/11669184/eli-sdo.ttl) informs the crosswalk.
 
-## Normalized categories, types and topics
+## Normalised categories, types and topics
 
 Official type codes are retained. They are also grouped into `primary`, `secondary`, `draft`, `eu-origin` and `other`, with separate jurisdiction and document-type facets. This preserves Church Measures, local/private Acts, old Parliament material, ministerial directions and other uncommon families rather than forcing them into a misleading primary/secondary binary.
 
@@ -53,6 +77,21 @@ table. The model runner records prompt version, model, review state, token usage
 and cost. Its first direct API attempt was rejected for project quota before
 output, so the current accepted rules were supplied by the Codex session and
 the recorded API cost is $0.00.
+
+Facet values are navigation indexes, not automatically relationship nodes. For
+example, **Scotland** has an exact snapshot-bound posting of 13,270 works, but
+the label means “territorial publication context inferred from the official
+type code”; it is not provision-level legal extent or applicability. Explorer
+therefore shows a bounded membership preview and derived membership graph for
+that card. Selecting a legal work then loads the work's route-scoped adjacency.
+
+The current route resolver combines core adjacency with governed
+model-assisted enrichment for a selected work. It uses digest-bound route
+locators and bounded shards, so a record card can show its own incident
+relationships without hydrating all 906,754 active assertions. Aggregate cards
+and exceptionally dense routes remain bounded; the interface must report that
+limit rather than presenting a partial result as the complete graph. Official
+effects remain source-derived and distinct from model-assisted discovery.
 
 ## Official access methods
 
@@ -88,16 +127,16 @@ An answer that cites only an Act landing page is not provenance-complete. A dire
 
 `evaluation/legislation/questions.json` contains 100 questions across 25 authorities and four common research modes: rule extraction, application, temporal/currency analysis and counsel-style synthesis. The 100-point rubric weights substantive correctness, authoritative sourcing, proposition provenance, pinpoint passages, temporal/jurisdictional context, completeness/uncertainty and clarity.
 
-Automated checks cover evidence structure and observable source properties. Expert review supplies the legal judgment that an automated keyword score cannot. Missing official citations, missing proposition ledgers, uncited propositions or failure to cite the expected passage cap an answer below 50.
+Automated checks cover evidence structure and observable source properties. Expert review supplies the legal judgement that an automated keyword score cannot. Missing official citations, missing proposition ledgers, uncited propositions or failure to cite the expected passage cap an answer below 50.
 
 ## Rebuild and validate
 
 ```sh
-python3 scripts/build_legislation_okf.py --refresh
-python3 scripts/check_legislation_okf.py
-python3 scripts/build_legislation_evaluation.py
+uv run --locked python scripts/build_legislation_okf.py --refresh
+uv run --locked python scripts/check_legislation_okf.py
+uv run --locked python scripts/build_legislation_evaluation.py
 cd apps/okf-explorer && pnpm test && pnpm check && pnpm build
-cd ../.. && python3 scripts/build_site.py
+cd ../.. && uv run --locked python scripts/build_site.py
 ```
 
 The source cache under `tmp/legislation-okf-source/` is intentionally untracked. The generated `legislation/` pack is checked in so Pages deployment and review do not depend on live upstream availability.

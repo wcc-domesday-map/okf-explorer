@@ -1,0 +1,690 @@
+from __future__ import annotations
+
+import json
+import math
+import unittest
+from pathlib import Path
+
+from ruamel.yaml import YAML
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class CiPublicationTopologyTests(unittest.TestCase):
+    def text(self, path: str) -> str:
+        return (ROOT / path).read_text(encoding="utf-8")
+
+    def workflow_jobs(self, path: str) -> dict[str, dict]:
+        workflow = YAML(typ="safe").load(self.text(path))
+        return workflow["jobs"]
+
+    def job_needs(self, job: dict) -> set[str]:
+        needs = job.get("needs", [])
+        return {needs} if isinstance(needs, str) else set(needs)
+
+    def test_governed_python_jobs_use_latest_ubuntu_and_managed_python(self) -> None:
+        for path in sorted((ROOT / ".github/workflows").glob("*.yml")):
+            for name, job in self.workflow_jobs(str(path.relative_to(ROOT))).items():
+                if any(step.get("uses") == "./.github/actions/setup-locked-python"
+                       for step in job.get("steps", [])):
+                    with self.subTest(workflow=path.name, job=name):
+                        self.assertEqual("ubuntu-latest", job["runs-on"])
+
+        setup = YAML(typ="safe").load(self.text(".github/actions/setup-locked-python/action.yml"))
+        steps = setup["runs"]["steps"]
+        self.assertFalse(any("actions/setup-python@" in step.get("uses", "") for step in steps))
+        install = next(i for i, step in enumerate(steps) if step.get("run") == "uv python install")
+        sync = next(i for i, step in enumerate(steps) if step.get("run") == "uv sync --locked")
+        self.assertLess(install, sync)
+
+    def test_remote_mcp_is_required_and_independent_of_heritage_app(self) -> None:
+        jobs = self.workflow_jobs(".github/workflows/okf-explorer-ci.yml")
+        remote = jobs["remote-mcp"]
+        self.assertEqual({"adversarial-gate"}, self.job_needs(remote))
+        self.assertNotIn("if", remote)
+        self.assertEqual(10, remote["timeout-minutes"])
+        self.assertIn("remote-mcp", self.job_needs(jobs["okf-explorer-ci"]))
+        commands = {
+            step["run"]: step.get("working-directory")
+            for step in remote["steps"] if "run" in step
+        }
+        for command in ("npm ci --ignore-scripts", "npm run check", "npm test", "npm run build"):
+            self.assertEqual("services/ask-okf-mcp", commands[command])
+        self.assertFalse(any("playwright" in command or "heritage" in command for command in commands))
+
+    def test_remote_mcp_browser_is_a_separate_required_built_service_gate(self) -> None:
+        jobs = self.workflow_jobs(".github/workflows/okf-explorer-ci.yml")
+        browser = jobs["remote-mcp-browser"]
+        self.assertEqual({"adversarial-gate"}, self.job_needs(browser))
+        self.assertNotIn("if", browser)
+        self.assertEqual(10, browser["timeout-minutes"])
+        self.assertIn("remote-mcp-browser", self.job_needs(jobs["okf-explorer-ci"]))
+        commands = {
+            step["run"]: step.get("working-directory")
+            for step in browser["steps"] if "run" in step
+        }
+        self.assertEqual("services/ask-okf-mcp", commands["npm ci --ignore-scripts"])
+        for command in (
+            "pnpm install --frozen-lockfile",
+            "pnpm exec svelte-kit sync",
+            "pnpm exec playwright test --config playwright.service-review.config.ts --project chrome",
+        ):
+            self.assertEqual("apps/okf-explorer", commands[command])
+        self.assertFalse(any("heritage" in command for command in commands))
+        config = self.text("apps/okf-explorer/playwright.service-review.config.ts")
+        self.assertIn("npm --prefix ../../services/ask-okf-mcp run build", config)
+        self.assertIn("npm --prefix ../../services/ask-okf-mcp start", config)
+        self.assertIn("reuseExistingServer: !process.env.CI", config)
+        upload = next(step for step in browser["steps"]
+                      if step.get("name") == "Retain service review browser evidence")
+        self.assertEqual("always()", upload["if"])
+        self.assertIn("output/playwright/service-review/", upload["with"]["path"])
+
+    def test_ci_is_impact_planned_parallel_and_fail_closed(self) -> None:
+        workflow = self.text(".github/workflows/okf-explorer-ci.yml")
+        jobs = self.workflow_jobs(".github/workflows/okf-explorer-ci.yml")
+        self.assertIn("impact-plan:", workflow)
+        self.assertIn("adversarial-gate:", workflow)
+        self.assertIn("--github-output", workflow)
+        for job in (
+            "python-contracts:",
+            "browser-targeted:",
+            "browser-full:",
+            "foundry:",
+            "documentation:",
+            "site:",
+            "okf-explorer-ci:",
+        ):
+            self.assertIn(job, workflow)
+        self.assertIn("needs.impact-plan.outputs.browser_full", workflow)
+        self.assertIn("needs.impact-plan.outputs.browser_targeted == 'true'", workflow)
+        self.assertIn("builder_fixtures:", workflow)
+        self.assertIn("builder_planes:", workflow)
+        self.assertIn("test_tags:", workflow)
+        self.assertIn("journey_groups:", workflow)
+        self.assertIn("result not in", workflow.replace("v[\"result\"] not in", "result not in"))
+        self.assertEqual(1, workflow.count("check_heritage_adversarial.py"))
+        self.assertIn("--output", workflow)
+        self.assertIn("adversarial-gate-results", workflow)
+        for job_name in (
+            "python-contracts",
+            "app",
+            "browser-targeted",
+            "browser-full",
+            "foundry",
+            "documentation",
+            "site",
+            "release-policy",
+            "okf-explorer-ci",
+        ):
+            with self.subTest(job=job_name):
+                self.assertIn("adversarial-gate", self.job_needs(jobs[job_name]))
+        for job_name in (
+            "python-contracts",
+            "app",
+            "browser-targeted",
+            "browser-full",
+            "foundry",
+            "documentation",
+            "site",
+            "release-policy",
+        ):
+            with self.subTest(job=job_name):
+                self.assertIn("impact-plan", self.job_needs(jobs[job_name]))
+        self.assertNotIn("needs", jobs["impact-plan"])
+        self.assertNotIn("needs", jobs["adversarial-gate"])
+        python_job = workflow[
+            workflow.index("  python-contracts:") : workflow.index("\n  app:")
+        ]
+        self.assertEqual(
+            {"impact-plan", "adversarial-gate", "app"},
+            self.job_needs(jobs["python-contracts"]),
+        )
+        self.assertIn(
+            "Download exact app build for identity-bound Python contracts", python_job
+        )
+        self.assertIn("name: okf-explorer-app-build", python_job)
+        self.assertIn("path: apps/okf-explorer/build", python_job)
+        self.assertLess(
+            python_job.index(
+                "Download exact app build for identity-bound Python contracts"
+            ),
+            python_job.index("uv run --locked python -m unittest discover -s tests"),
+        )
+        self.assertIn("check_impacted_heritage_evaluation.py", python_job)
+        self.assertIn("needs.impact-plan.outputs.builder_fixtures", python_job)
+        self.assertIn("needs.impact-plan.outputs.builder_planes", python_job)
+
+        app_job = workflow[
+            workflow.index("  app:") : workflow.index("\n  browser-targeted:")
+        ]
+        self.assertIn("needs.impact-plan.outputs.python == 'true'", app_job)
+        app_steps = jobs["app"]["steps"]
+        chromium_install_steps = [
+            step
+            for step in app_steps
+            if step.get("run")
+            == "pnpm exec playwright install --with-deps chromium"
+        ]
+        app_test_steps = [
+            step for step in app_steps if step.get("run") == "pnpm test"
+        ]
+        self.assertEqual([], chromium_install_steps)
+        self.assertEqual(1, len(app_test_steps))
+        self.assertEqual(
+            "apps/okf-explorer", app_test_steps[0].get("working-directory")
+        )
+        self.assertEqual(
+            "chrome",
+            app_test_steps[0].get("env", {}).get("PLAYWRIGHT_CHROMIUM_CHANNEL"),
+        )
+
+        targeted = workflow[
+            workflow.index("  browser-targeted:") : workflow.index("\n  browser-full:")
+        ]
+        self.assertIn("pnpm test:e2e:warwickshire", targeted)
+        self.assertNotIn("pnpm test:e2e:impacted", targeted)
+        self.assertLess(
+            targeted.index("pnpm install --frozen-lockfile"),
+            targeted.index("pnpm exec svelte-kit sync"),
+        )
+        self.assertLess(
+            targeted.index("pnpm exec svelte-kit sync"),
+            targeted.index("pnpm test:e2e:warwickshire"),
+        )
+
+        full = workflow[
+            workflow.index("  browser-full:") : workflow.index("\n  foundry:")
+        ]
+        self.assertIn("uv run --locked python scripts/build_site.py", full)
+        self.assertIn("pnpm test:e2e:warwickshire:terminal", full)
+        self.assertLess(
+            full.index("pnpm install --frozen-lockfile"),
+            full.index("pnpm exec svelte-kit sync"),
+        )
+        self.assertLess(
+            full.index("pnpm exec svelte-kit sync"),
+            full.index("pnpm test:e2e:warwickshire:terminal"),
+        )
+
+    def test_heritage_observation_producer_does_not_replace_retained_gates(self) -> None:
+        document = YAML(typ="safe").load(self.text(".github/workflows/okf-explorer-ci.yml"))
+        jobs = document["jobs"]
+        producer = jobs["heritage-candidate-evidence"]
+        self.assertEqual({"pull_request", "workflow_dispatch"}, set(document["on"]))
+        self.assertEqual({"contents": "read"}, document["permissions"])
+        self.assertEqual({"contents": "read"}, producer["permissions"])
+        self.assertEqual({"impact-plan", "adversarial-gate", "app"}, self.job_needs(producer))
+        self.assertEqual(20, producer["timeout-minutes"])
+        self.assertNotIn("heritage-candidate-evidence", self.job_needs(jobs["okf-explorer-ci"]))
+        self.assertIn("python-contracts", self.job_needs(jobs["okf-explorer-ci"]))
+        steps = producer["steps"]
+        download = next(step for step in steps if step.get("name") == "Download this run's exact app build")
+        self.assertEqual("okf-explorer-app-build", download["with"]["name"])
+        execution = next(step for step in steps if step.get("name") == "Execute the unchanged canonical browser evaluation")
+        self.assertIn("--limit 100", execution["run"])
+        self.assertIn("--bundle /publication/okf-explorer.json", execution["run"])
+        self.assertIn("--candidate-bundle /okf-explorer.json", execution["run"])
+        for identity in ("journey-tiny", "journey-faithful", "journey-synthetic-isolation"):
+            self.assertIn("--journey-id " + identity, execution["run"])
+        self.assertEqual("/opt/google/chrome/chrome", execution["env"]["PLAYWRIGHT_EXECUTABLE_PATH"])
+        commands = "\n".join(step.get("run", "") for step in steps)
+        for forbidden in ("--no-browser", "--defer-browser-receipts", "build_heritage_local_candidate_receipt.py", "git commit", "git push"):
+            self.assertNotIn(forbidden, commands)
+        self.assertIn("node --test scripts/serve_heritage_candidate.test.mjs", commands)
+        self.assertIn("python -m unittest tests.test_emit_heritage_candidate_transport -v", commands)
+        transport = steps[-2]
+        self.assertNotIn("if", transport)
+        self.assertEqual("uv run --locked python scripts/emit_heritage_candidate_transport.py", transport["run"])
+        self.assertLess(steps.index(execution), steps.index(transport))
+        upload = steps[-1]
+        self.assertEqual("always()", upload["if"])
+        self.assertEqual("tmp/heritage-candidate/", upload["with"]["path"])
+        self.assertEqual(7, upload["with"]["retention-days"])
+
+    def test_standalone_pages_is_disabled_for_warwickshire(
+        self,
+    ) -> None:
+        workflow = self.text(".github/workflows/pages.yml")
+        document = YAML(typ="safe").load(workflow)
+        jobs = self.workflow_jobs(".github/workflows/pages.yml")
+        self.assertEqual({"contents": "read"}, document["permissions"])
+        self.assertEqual({"standalone-pages-disabled"}, set(jobs))
+        self.assertEqual({"workflow_dispatch"}, set(document["on"]))
+        guard = jobs["standalone-pages-disabled"]["steps"][0]["run"]
+        self.assertIn("Standalone GitHub Pages publication is disabled", guard)
+        self.assertIn("exit 1", guard)
+        self.assertNotIn("deploy-pages", workflow)
+        self.assertNotIn("upload-pages-artifact", workflow)
+
+    def test_nightly_shadow_and_observers_are_separate(self) -> None:
+        shadow = self.text(".github/workflows/foundry-full-shadow.yml")
+        shadow_document = YAML(typ="safe").load(shadow)
+        shadow_jobs = self.workflow_jobs(".github/workflows/foundry-full-shadow.yml")
+        links = self.text(".github/workflows/link-observation.yml")
+        self.assertIn("schedule:", shadow)
+        self.assertIn("workflow_dispatch:", shadow)
+        self.assertEqual(
+            "${{ github.workflow }}-${{ github.ref }}",
+            shadow_document["concurrency"]["group"],
+        )
+        self.assertIs(True, shadow_document["concurrency"]["cancel-in-progress"])
+        self.assertEqual(10, shadow_jobs["adversarial-gate"]["timeout-minutes"])
+        self.assertEqual(45, shadow_jobs["browser-three-engine"]["timeout-minutes"])
+        self.assertEqual(45, shadow_jobs["foundry-full-family"]["timeout-minutes"])
+        self.assertIn("uv run --locked python scripts/build_site.py", shadow)
+        self.assertIn("pnpm test:e2e:warwickshire:terminal", shadow)
+        self.assertIn("--check --fixture all", shadow)
+        self.assertLess(
+            shadow.index("retarget_heritage_source_snapshots.py --check"),
+            shadow.index("build_heritage_evaluation.py --check --fixture all"),
+        )
+        self.assertEqual(1, shadow.count("check_heritage_adversarial.py"))
+        self.assertEqual(
+            {"adversarial-gate"},
+            self.job_needs(shadow_jobs["browser-three-engine"]),
+        )
+        self.assertEqual(
+            {"adversarial-gate"},
+            self.job_needs(shadow_jobs["foundry-full-family"]),
+        )
+        shadow_foundry_steps = shadow_jobs["foundry-full-family"]["steps"]
+        shadow_foundry_build_index = next(
+            index
+            for index, step in enumerate(shadow_foundry_steps)
+            if step.get("run") == "pnpm build:determinism"
+        )
+        shadow_foundry_checks_index = next(
+            index
+            for index, step in enumerate(shadow_foundry_steps)
+            if step.get("name") == "Run full Foundry and candidate checks"
+        )
+        self.assertEqual(
+            "apps/okf-explorer",
+            shadow_foundry_steps[shadow_foundry_build_index].get(
+                "working-directory"
+            ),
+        )
+        self.assertLess(
+            shadow_foundry_build_index,
+            shadow_foundry_checks_index,
+            "candidate checks require the exact Explorer build manifest",
+        )
+        shadow_browser = shadow[
+            shadow.index("  browser-three-engine:") : shadow.index(
+                "\n  foundry-full-family:"
+            )
+        ]
+        shadow_steps = shadow_jobs["browser-three-engine"]["steps"]
+        shadow_chromium_steps = [
+            step
+            for step in shadow_steps
+            if step.get("run")
+            == "pnpm exec playwright install --with-deps chromium"
+        ]
+        shadow_validation_steps = [
+            index
+            for index, step in enumerate(shadow_steps)
+            if step.get("name") == "Validate and deterministically build Explorer"
+            and "pnpm test" in step.get("run", "")
+        ]
+        self.assertEqual([], shadow_chromium_steps)
+        self.assertEqual(1, len(shadow_validation_steps))
+        self.assertEqual(
+            "chrome",
+            shadow_steps[shadow_validation_steps[0]]
+            .get("env", {})
+            .get("PLAYWRIGHT_CHROMIUM_CHANNEL"),
+        )
+        shadow_cross_engine_install = next(
+            step
+            for step in shadow_steps
+            if step.get("run")
+            == "pnpm exec playwright install --with-deps firefox webkit"
+        )
+        self.assertEqual(10, shadow_cross_engine_install.get("timeout-minutes"))
+        self.assertLess(
+            shadow_browser.index("pnpm install --frozen-lockfile"),
+            shadow_browser.index("pnpm exec svelte-kit sync"),
+        )
+        self.assertLess(
+            shadow_browser.index("pnpm exec svelte-kit sync"),
+            shadow_browser.index("pnpm test:e2e:warwickshire:terminal"),
+        )
+        self.assertIn("schedule:", links)
+        self.assertIn("observe_link_intents.py", links)
+        self.assertIn("observe_protected_links.mjs", links)
+        self.assertIn("xvfb-run", links)
+        self.assertIn("--chrome google-chrome", links)
+        self.assertNotIn("playwright install", links)
+        self.assertIn("$RUNNER_TEMP", links)
+        self.assertNotIn("scripts/build_site.py", links)
+
+        observer = self.text(
+            "apps/okf-explorer/scripts/observe_protected_links.mjs"
+        )
+        link_policy = json.loads(
+            self.text("release-assurance/link-observation-policy.json")
+        )
+        self.assertIn("okf-genuine-browser-link-receipt.v1", observer)
+        self.assertIn("navigator.webdriver", observer)
+        self.assertIn("navigator.languages", observer)
+        self.assertIn(link_policy["protected_browser_channel"], observer)
+        self.assertIn("Network.responseReceived", observer)
+        for automation_flag in (
+            "--enable-automation",
+            "--headless",
+            "--remote-debugging-port=0",
+            "AutomationControlled",
+        ):
+            self.assertNotIn(automation_flag, observer)
+
+    def test_browser_package_exposes_terminal_three_engine_assurance(self) -> None:
+        package = self.text("apps/okf-explorer/package.json")
+        runner = self.text(
+            "apps/okf-explorer/scripts/run_impacted_browser_tests.mjs"
+        )
+        self.assertIn('"test:e2e:impacted"', package)
+        self.assertIn('"test:e2e:terminal"', package)
+        for engine in ("chrome", "firefox", "webkit"):
+            self.assertIn(engine, package)
+        self.assertIn("TEST_TAG_SUITES", runner)
+        self.assertIn("JOURNEY_GROUP_SUITES", runner)
+        self.assertIn("fail-closed-full", runner)
+
+    def test_external_repository_templates_enforce_pages_and_release_provenance(
+        self,
+    ) -> None:
+        ci = self.text(
+            "publication-units/heritage-coventry-warwickshire/"
+            "repository-template/ci.yml"
+        )
+        candidate = self.text(
+            "publication-units/heritage-coventry-warwickshire/"
+            "repository-template/candidate-release.yml"
+        )
+        terminal = self.text(
+            "publication-units/heritage-coventry-warwickshire/"
+            "repository-template/terminal-assurance.yml"
+        )
+        promotion = self.text(
+            "publication-units/heritage-coventry-warwickshire/"
+            "repository-template/promotion-release.yml"
+        )
+        pages = self.text(
+            "publication-units/heritage-coventry-warwickshire/"
+            "repository-template/pages.yml"
+        )
+        ci_document = YAML(typ="safe").load(ci)
+        candidate_document = YAML(typ="safe").load(candidate)
+        terminal_document = YAML(typ="safe").load(terminal)
+        promotion_document = YAML(typ="safe").load(promotion)
+        pages_document = YAML(typ="safe").load(pages)
+        policy = self.text("release-assurance/release-policy.json")
+        link_policy = json.loads(
+            self.text("release-assurance/link-observation-policy.json")
+        )
+        publication = self.text("PUBLICATION.md")
+        self.assertEqual(
+            "${{ github.workflow }}-${{ github.ref }}",
+            ci_document["concurrency"]["group"],
+        )
+        self.assertIs(True, ci_document["concurrency"]["cancel-in-progress"])
+        self.assertEqual(15, ci_document["jobs"]["candidate"]["timeout-minutes"])
+        self.assertIn("workflow_dispatch:", candidate)
+        self.assertEqual({"workflow_dispatch"}, set(candidate_document["on"]))
+        self.assertEqual(
+            "candidate-release-${{ inputs.tag }}",
+            candidate_document["concurrency"]["group"],
+        )
+        self.assertIs(
+            False, candidate_document["concurrency"]["cancel-in-progress"]
+        )
+        self.assertEqual(
+            30, candidate_document["jobs"]["candidate-release"]["timeout-minutes"]
+        )
+        self.assertNotIn("  push:", candidate)
+        self.assertNotIn("immutable-releases", candidate)
+        self.assertNotIn("--immutable-settings", candidate)
+        self.assertNotIn("secrets.", candidate)
+        self.assertIn("GH_TOKEN: ${{ github.token }}", candidate)
+        self.assertIn("--phase candidate", candidate)
+        self.assertIn("actions/attest@", candidate)
+        self.assertIn(
+            "check_publication_unit_manifest.py publication/site", candidate
+        )
+        self.assertIn("repository: chris-page-gov/okf-explorer", candidate)
+        self.assertIn("ref: ${{ inputs.assurance_ref }}", candidate)
+        self.assertIn("pip install -r assurance/requirements-okf.txt", candidate)
+        self.assertNotIn("publication/site/requirements-okf.txt", candidate)
+        self.assertNotIn("python3 publication/site/", candidate)
+        self.assertIn("ATTESTATION_WORKFLOW_REF: ${{ github.workflow_ref }}", candidate)
+        self.assertIn("ATTESTATION_WORKFLOW_COMMIT: ${{ github.workflow_sha }}", candidate)
+        self.assertIn("ATTESTATION_SOURCE_COMMIT: ${{ github.sha }}", candidate)
+        self.assertIn("--source-repository-root publication", candidate)
+        self.assertIn("--attestation-workflow-ref", candidate)
+        self.assertIn("--attestation-workflow-commit", candidate)
+        self.assertIn("--attestation-source-ref", candidate)
+        self.assertIn("--attestation-source-commit", candidate)
+        self.assertIn("heritage-coventry-warwickshire.tar.gz", candidate)
+        self.assertIn("cd \"$RUNNER_TEMP\"", candidate)
+        self.assertIn("--draft", candidate)
+        self.assertIn("--draft=false", candidate)
+        self.assertIn('test "$GITHUB_REF" = refs/heads/main', candidate)
+        self.assertIn('test "$action_url" = "$expected_release_url"', candidate)
+        self.assertIn('gh release verify "$TAG"', candidate)
+        self.assertIn("--release-attestation-json", candidate)
+        promotion_post_publish = promotion[
+            promotion.index(
+                "- name: Verify R2 platform immutability without feeding back"
+            ):
+        ]
+        for asset in (
+            "heritage-coventry-warwickshire.tar.gz",
+            "SHA256SUMS",
+            "publication-unit-manifest.json",
+            "publication-validation-receipt.json",
+            "candidate-release-receipt.json",
+        ):
+            self.assertIn(f'--release-asset "{asset}=', candidate)
+            self.assertEqual(
+                1,
+                candidate.count(f'--release-asset "{asset}='),
+                f"candidate release asset must occur exactly once: {asset}",
+            )
+        self.assertIn("--all-shards", terminal)
+        self.assertIn("--fail-on-error", terminal)
+        self.assertIn("if: ${{ always() }}", terminal)
+        self.assertIn("if-no-files-found: warn", terminal)
+        self.assertIn(
+            "Upload the timestamped closure or failure diagnostics", terminal
+        )
+        self.assertIn("--browser-engine \"$engine\"", terminal)
+        self.assertIn("version: 10", terminal)
+        self.assertIn(
+            "package_json_file: assurance/apps/okf-explorer/package.json", terminal
+        )
+        self.assertIn(
+            "cache-dependency-path: assurance/apps/okf-explorer/pnpm-lock.yaml",
+            terminal,
+        )
+        self.assertIn("working-directory: assurance/apps/okf-explorer", terminal)
+        self.assertIn("PLAYWRIGHT_PACKAGE:", terminal)
+        self.assertIn("node_modules/@playwright/test", terminal)
+        self.assertEqual(
+            "terminal-assurance-${{ inputs.candidate_tag }}",
+            terminal_document["concurrency"]["group"],
+        )
+        self.assertIs(True, terminal_document["concurrency"]["cancel-in-progress"])
+        terminal_steps = terminal_document["jobs"]["terminal-assurance"]["steps"]
+        terminal_browser_install = next(
+            step
+            for step in terminal_steps
+            if step.get("run")
+            == "pnpm exec playwright install --with-deps firefox webkit"
+        )
+        self.assertEqual(10, terminal_browser_install.get("timeout-minutes"))
+        self.assertNotIn(
+            "playwright install --with-deps chromium",
+            terminal,
+        )
+        self.assertIn(
+            'PLAYWRIGHT_EXECUTABLE_PATH="$(command -v google-chrome)"',
+            terminal,
+        )
+        self.assertIn('if [ "$engine" = chromium ]', terminal)
+        self.assertIn(
+            '--publication-root "$GITHUB_WORKSPACE/publication/site"',
+            terminal,
+        )
+        self.assertIn("timeout --signal=TERM 75m", terminal)
+        bounds = link_policy["terminal_bounds"]
+        worst_case_seconds = (
+            math.ceil(
+                bounds["maximum_canonical_urls"]
+                / link_policy["concurrent_requests"]
+            )
+            * link_policy["request_timeout_seconds"]
+            * bounds["maximum_attempts_per_url"]
+        )
+        self.assertLess(
+            worst_case_seconds,
+            bounds["bulk_step_timeout_minutes"] * 60,
+        )
+        self.assertLessEqual(
+            bounds["bulk_step_timeout_minutes"]
+            + bounds["reserved_non_bulk_minutes"],
+            bounds["job_timeout_minutes"],
+        )
+        self.assertIn(
+            f"timeout-minutes: {bounds['job_timeout_minutes']}", terminal
+        )
+        self.assertIn("ASSURANCE_COMMIT", terminal)
+        self.assertIn("^[0-9a-f]{40}$", terminal)
+        self.assertIn(
+            "Run 21 live and 11 receipt-backed actions in all three engines",
+            terminal,
+        )
+        self.assertIn(
+            'test "$GITHUB_REF" = "refs/tags/$CANDIDATE_TAG"', terminal
+        )
+        self.assertIn('test "$action_url" = "$expected_release_url"', terminal)
+        for engine in ("chromium", "firefox", "webkit"):
+            self.assertIn(engine, terminal)
+        self.assertIn("--phase promotion", promotion)
+        self.assertIn("--require-promoted", promotion)
+        self.assertIn("materialize_promotion_envelope.py", promotion)
+        self.assertIn("actions/attest@", promotion)
+        self.assertIn("promotion-container-observation.json", promotion)
+        self.assertIn("--draft", promotion)
+        self.assertIn("--draft=false", promotion)
+        self.assertIn('test "$GITHUB_REF" = refs/heads/main', promotion)
+        self.assertEqual({"workflow_dispatch"}, set(promotion_document["on"]))
+        self.assertEqual(
+            "promotion-release-${{ inputs.promotion_tag }}",
+            promotion_document["concurrency"]["group"],
+        )
+        self.assertIs(
+            False, promotion_document["concurrency"]["cancel-in-progress"]
+        )
+        self.assertEqual(
+            30,
+            promotion_document["jobs"]["promotion-release"]["timeout-minutes"],
+        )
+        self.assertNotIn("immutable-releases", promotion)
+        self.assertNotIn("--immutable-settings", promotion)
+        self.assertNotIn("secrets.", promotion)
+        self.assertIn("GH_TOKEN: ${{ github.token }}", promotion)
+        self.assertIn("repository: chris-page-gov/okf-explorer", promotion)
+        self.assertIn("pip install -r assurance/requirements-okf.txt", promotion)
+        self.assertNotIn("publication/site/requirements-okf.txt", promotion)
+        self.assertNotIn("python3 publication/site/", promotion)
+        self.assertIn(
+            "--template assurance/publication-units/heritage-coventry-warwickshire/"
+            "repository-template/promotion-envelope.template.json",
+            promotion,
+        )
+        self.assertIn(
+            "python3 assurance/scripts/check_terminal_promotion_envelope.py",
+            promotion,
+        )
+        self.assertEqual(
+            2,
+            promotion.count(
+                "python3 assurance/scripts/check_terminal_release_policy.py"
+            ),
+        )
+        self.assertIn("ATTESTATION_WORKFLOW_REF: ${{ github.workflow_ref }}", promotion)
+        self.assertIn("ATTESTATION_WORKFLOW_COMMIT: ${{ github.workflow_sha }}", promotion)
+        self.assertIn("ATTESTATION_SOURCE_COMMIT: ${{ github.sha }}", promotion)
+        self.assertIn("--source-repository-root publication", promotion)
+        self.assertIn("terminal-run.json", promotion)
+        self.assertIn("terminal-assurance.yml", promotion)
+        self.assertIn("assurance_ref:", promotion)
+        self.assertIn('test "$assurance_commit" = "$ASSURANCE_REF"', promotion)
+        self.assertIn('.conclusion == "success"', promotion)
+        self.assertIn(".head_sha == $head_sha", promotion)
+        self.assertIn(".run_started_at", promotion)
+        self.assertIn("terminal-artifacts.json", promotion)
+        self.assertIn('gh release verify "$PROMOTION_TAG"', promotion)
+        self.assertIn("--release-attestation-json", promotion)
+        for engine in ("chromium", "firefox", "webkit"):
+            self.assertIn(f"journey-{engine}-results.json", promotion)
+        for asset in (
+            "heritage-publication-envelope.json",
+            "heritage-publication-envelope.attestation.json",
+            "candidate-release-receipt.json",
+            "publication-validation-receipt.json",
+            "publication-journey-receipt.json",
+            "link-observation-receipt.json",
+            "protected-link-browser-receipt.json",
+            "journey-chromium-results.json",
+            "journey-firefox-results.json",
+            "journey-webkit-results.json",
+        ):
+            self.assertIn(f'--release-asset "{asset}=', promotion)
+            self.assertEqual(
+                1,
+                promotion_post_publish.count(f'--release-asset "{asset}='),
+                f"promotion release asset must occur exactly once: {asset}",
+            )
+        self.assertIn("path: site", pages)
+        self.assertIn('      - "site/**"', pages)
+        self.assertEqual(["site/**"], pages_document["on"]["push"]["paths"])
+        self.assertIn("check_publication_unit_manifest.py site", pages)
+        self.assertEqual(10, pages_document["jobs"]["build"]["timeout-minutes"])
+        self.assertEqual(10, pages_document["jobs"]["deploy"]["timeout-minutes"])
+        self.assertNotIn("pip install", pages)
+        self.assertNotIn("requirements-okf.txt", pages)
+        self.assertNotIn("permissions", pages_document)
+        self.assertEqual(
+            {"contents": "read", "pages": "read"},
+            pages_document["jobs"]["build"]["permissions"],
+        )
+        self.assertEqual(
+            {"pages": "write", "id-token": "write"},
+            pages_document["jobs"]["deploy"]["permissions"],
+        )
+        self.assertIn("PYTHONDONTWRITEBYTECODE", pages)
+        self.assertNotIn("check_promotion_envelope.py", pages)
+        self.assertIn('"live_browser_actions": 21', policy)
+        self.assertIn('"receipt_backed_actions": 11', policy)
+        self.assertIn('"administration_read_required": false', policy)
+        self.assertIn(
+            '"immutable_release_evidence": "post-publication-release-json-and-gh-release-verify"',
+            policy,
+        )
+        self.assertIn(
+            '"template_path": "release-assurance/promotion-envelope.template.json"',
+            policy,
+        )
+        self.assertIn("install the five workflows", publication)
+        self.assertIn(
+            "Dispatch `promotion-release.yml` from updated `main`", publication
+        )
+        self.assertIn("verified release attestation", publication)
+
+
+if __name__ == "__main__":
+    unittest.main()

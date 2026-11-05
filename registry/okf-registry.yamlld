@@ -1,26 +1,180 @@
 "@context": https://chris-page-gov.github.io/okf-explorer/profile/bundle-wiki/v1/context.jsonld
-"@id": https://github.com/wcc-domesday-map/okf-explorer#warwickshire-registry
+"@id": https://chris-page-gov.github.io/okf-explorer/registry
 "@type": okf:Registry
-title: Warwickshire OKF Explorer Registry
-description: Same-origin registry for the governed Warwickshire public knowledge bundle.
-modified: "2026-07-16T00:00:00Z"
+title: OKF Explorer Registry
+description: Curated registry of independently publishable OKF bundle examples.
+modified: "2026-08-18T00:00:00Z"
 profile:
   "@id": https://chris-page-gov.github.io/okf-explorer/profile/bundle-wiki/v1/
 bundles:
-  - "@id": ../okf/warwickshire-public/
+  - "@id": https://chris-page-gov.github.io/okf-explorer/bundles/ai-infrastructure
     "@type": okf:Bundle
-    title: Warwickshire Public Knowledge
-    description: Governed public Warwickshire service, open-data, GeoServer and news metadata. SearchOut remains inventory-only pending written reuse permission.
-    version: 0.2.0-demo.3
-    status: demo
+    title: AI Infrastructure
+    description: Default reference bundle generated from the AI infrastructure Markdown corpus during migration.
+    version: 0.6.0
+    status: stable
     descriptor:
-      "@id": ../okf/warwickshire-public/okf-bundle.json
+      "@id": https://chris-page-gov.github.io/okf-ai-infrastructure/okf-bundle.json
     semanticDescriptor:
-      "@id": ../okf/warwickshire-public/graph.yamlld
+      "@id": https://chris-page-gov.github.io/okf-ai-infrastructure/okf-bundle.yamlld
     home:
-      "@id": ../okf/warwickshire-public/index.md
+      "@id": https://chris-page-gov.github.io/okf-ai-infrastructure/
     profile:
       "@id": https://chris-page-gov.github.io/okf-explorer/profile/bundle-wiki/v1/
     publisher:
-      "@id": https://github.com/wcc-domesday-map
+      "@id": https://github.com/chris-page-gov
+    license:
+      "@id": https://creativecommons.org/publicdomain/zero/1.0/
     recordTypeLabel: local-sample
+  - "@id": https://chris-page-gov.github.io/okf-explorer/bundles/ons-data-discovery
+    "@type": okf:Bundle
+    title: ONS data discovery OKF
+    description: Metadata-only ONS discovery demonstrator with explicit coverage, confusable alternatives, standards evidence and MCP selection bindings.
+    version: 0.2.0
+    status: preview
+    descriptor:
+      "@id": https://chris-page-gov.github.io/okf-ons/okf-explorer.json
+    semanticDescriptor:
+      "@id": https://chris-page-gov.github.io/okf-ons/okf-bundle.yamlld
+    home:
+      "@id": https://chris-page-gov.github.io/okf-ons/
+    profile:
+      "@id": https://chris-page-gov.github.io/okf-explorer/profile/bundle-wiki/v1/
+    publisher:
+      "@id": https://github.com/chris-page-gov/okf-ons
+    license:
+      "@id": https://chris-page-gov.github.io/okf-ons/okf-explorer.json#rights
+    recordTypeLabel: large-corpus
+  - "@id": https://chris-page-gov.github.io/okf-explorer/bundles/gov-ckan
+    "@type": okf:Bundle
+    title: GOV.UK CKAN large corpus
+    description: External large-corpus exemplar using chunked CKAN metadata and static search shards.
+    version: 1.0.0
+    status: stable
+    descriptor:
+      "@id": https://chris-page-gov.github.io/ai-engineering-lab-hackathon-london-2026/gov-ckan/okf-explorer.json
+    semanticDescriptor:
+      "@id": https://chris-page-gov.github.io/ai-engineering-lab-hackathon-london-2026/gov-ckan/okf-explorer.json
+    home:
+      "@id": https://chris-page-gov.github.io/ai-engineering-lab-hackathon-london-2026/
+    profile:
+      "@id": https://chris-page-gov.github.io/okf-explorer/profile/bundle-wiki/v1/
+    publisher:
+      "@id": https://github.com/chris-page-gov
+    license:
+      "@id": https://creativecommons.org/publicdomain/zero/1.0/
+    recordTypeLabel: large-corpus
+  - "@id": https://chris-page-gov.github.io/okf-explorer/bundles/uk-government-apis
+    "@type": okf:Bundle
+    title: UK Government APIs OKF
+    description: Multi-source API and data-access large-corpus exemplar.
+    version: 0.4.0
+    status: preview
+    descriptor:
+      "@id": https://chris-page-gov.github.io/okf-uk-government-apis/okf-explorer.json
+    semanticDescriptor:
+      "@id": https://chris-page-gov.github.io/okf-uk-government-apis/okf-bundle.yamlld
+    home:
+      "@id": https://chris-page-gov.github.io/okf-uk-government-apis/
+    profile:
+      "@id": https://chris-page-gov.github.io/okf-explorer/profile/bundle-wiki/v1/
+    publisher:
+      "@id": https://github.com/chris-page-gov
+    license:
+      "@id": https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/
+    recordTypeLabel: large-corpus
+  - "@id": https://chris-page-gov.github.io/okf-explorer/bundles/uk-legislation
+    "@type": okf:Bundle
+    title: UK Legislation complete work catalogue
+    description: Complete legislation.gov.uk work catalogue with live progressive CLML discovery.
+    version: 0.4.0
+    status: stable
+    descriptor:
+      "@id": https://chris-page-gov.github.io/okf-uk-legislation/okf-explorer.json
+    semanticDescriptor:
+      "@id": https://chris-page-gov.github.io/okf-uk-legislation/okf-bundle.yamlld
+    home:
+      "@id": https://chris-page-gov.github.io/okf-uk-legislation/
+    profile:
+      "@id": https://chris-page-gov.github.io/okf-explorer/profile/bundle-wiki/v1/
+    publisher:
+      "@id": https://github.com/chris-page-gov
+    license:
+      "@id": https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/
+    recordTypeLabel: large-corpus
+  - "@id": https://chris-page-gov.github.io/okf-explorer/bundles/uk-whole-law
+    "@type": okf:Bundle
+    title: UK Whole-Law OKF
+    description: Federated overview of independently governed UK legal-source bundles with explicit authority, coverage, freshness and alternate access routes.
+    version: 0.4.0
+    status: stable
+    descriptor:
+      "@id": https://chris-page-gov.github.io/okf-uk-legislation/whole-law/okf-explorer.json
+    semanticDescriptor:
+      "@id": https://chris-page-gov.github.io/okf-uk-legislation/whole-law/okf-bundle.yamlld
+    home:
+      "@id": https://chris-page-gov.github.io/okf-uk-legislation/whole-law/
+    repository:
+      "@id": https://github.com/chris-page-gov/okf-uk-legislation
+    documentation:
+      "@id": https://chris-page-gov.github.io/okf-uk-legislation/whole-law/
+    rawSubpath: bundle/whole-law
+    releaseArchive:
+      "@id": https://github.com/chris-page-gov/okf-uk-legislation/releases
+    descriptorAlternates:
+      - "@id": https://raw.githubusercontent.com/chris-page-gov/okf-uk-legislation/main/bundle/whole-law/okf-explorer.json
+    profile:
+      "@id": https://chris-page-gov.github.io/okf-explorer/profile/federation/v1/
+    publisher:
+      "@id": https://github.com/chris-page-gov
+    license:
+      "@id": https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/
+    recordTypeLabel: federation
+  - "@id": https://chris-page-gov.github.io/okf-explorer/bundles/heritage-coventry-warwickshire
+    "@type": okf:Bundle
+    title: Coventry and Warwickshire Heritage Evaluation
+    description: Independently published Evaluation Foundry exemplar covering the faithful source-backed corpus, tiny assurance subset and isolated synthetic capability supplement; promotion evidence is carried by its signed release envelope.
+    version: 1.0.0
+    status: stable
+    descriptor:
+      "@id": https://chris-page-gov.github.io/okf-heritage-coventry-warwickshire/okf-explorer.json
+    semanticDescriptor:
+      "@id": https://chris-page-gov.github.io/okf-heritage-coventry-warwickshire/okf-bundle.yamlld
+    home:
+      "@id": https://chris-page-gov.github.io/okf-heritage-coventry-warwickshire/
+    profile:
+      "@id": https://chris-page-gov.github.io/okf-heritage-coventry-warwickshire/evaluation-foundry/fixtures/heritage-warwickshire/profile.html
+    repository:
+      "@id": https://github.com/chris-page-gov/okf-heritage-coventry-warwickshire
+    documentation:
+      "@id": https://chris-page-gov.github.io/okf-heritage-coventry-warwickshire/docs/heritage-evaluation-report.html
+    releaseArchive:
+      "@id": https://github.com/chris-page-gov/okf-heritage-coventry-warwickshire/releases/tag/heritage-coventry-warwickshire-20260804
+    publisher:
+      "@id": https://github.com/chris-page-gov
+    license:
+      "@id": https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/
+    recordTypeLabel: large-corpus
+  - "@id": https://chris-page-gov.github.io/okf-explorer/bundles/dwp-learning-paths
+    "@type": okf:Bundle
+    title: DWP learning paths
+    description: Twelve role-based paths and 112 activities covering the DWP demonstrations, with inspectable evidence, practice artefacts and facilitator assessment. Independent teaching material; not official DWP training or a complete statement of entitlement.
+    version: 2026.09.22
+    status: experimental
+    descriptor:
+      "@id": https://raw.githubusercontent.com/chris-page-gov/okf-dwp/main/combined/okf-explorer.json
+    semanticDescriptor:
+      "@id": https://raw.githubusercontent.com/chris-page-gov/okf-dwp/main/combined/okf-bundle.yamlld
+    home:
+      "@id": https://chris-page-gov.github.io/okf-dwp/
+    repository:
+      "@id": https://github.com/chris-page-gov/okf-dwp
+    documentation:
+      "@id": https://github.com/chris-page-gov/okf-dwp/blob/main/docs/learning/README.md
+    profile:
+      "@id": https://chris-page-gov.github.io/okf-explorer/profile/bundle-wiki/v1/
+    publisher:
+      "@id": https://github.com/chris-page-gov
+    license:
+      "@id": https://github.com/chris-page-gov/okf-dwp/blob/main/NOTICE.md
+    recordTypeLabel: large-corpus

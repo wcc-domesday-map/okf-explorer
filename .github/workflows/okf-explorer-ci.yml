@@ -8,98 +8,483 @@ permissions:
   contents: read
 
 jobs:
-  okf-explorer-ci:
+  impact-plan:
     runs-on: ubuntu-latest
+    outputs:
+      python: ${{ steps.plan.outputs.python || 'true' }}
+      app: ${{ steps.plan.outputs.app || 'true' }}
+      browser_targeted: ${{ steps.plan.outputs.browser_targeted || 'true' }}
+      browser_full: ${{ steps.plan.outputs.browser_full || 'true' }}
+      foundry: ${{ steps.plan.outputs.foundry || 'true' }}
+      site: ${{ steps.plan.outputs.site || 'true' }}
+      docs: ${{ steps.plan.outputs.docs || 'true' }}
+      release: ${{ steps.plan.outputs.release || 'true' }}
+      fixtures: ${{ steps.plan.outputs.fixtures || '["adversarial","tiny","faithful","synthetic"]' }}
+      builder_fixtures: ${{ steps.plan.outputs.builder_fixtures || '["tiny","faithful","synthetic"]' }}
+      builder_planes: ${{ steps.plan.outputs.builder_planes || '["control","data","search","semantic","presentation"]' }}
+      test_tags: ${{ steps.plan.outputs.test_tags || '[]' }}
+      journey_groups: ${{ steps.plan.outputs.journey_groups || '[]' }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v6
+      - name: Set up locked Python toolchain
+        uses: ./.github/actions/setup-locked-python
+      - name: Check documentation lockstep
+        run: uv run --locked python scripts/check_documentation_lockstep.py --base "origin/${{ github.event.pull_request.base.ref || 'main' }}...HEAD"
+      - name: Check receipt-backed remote release documentation
+        run: |
+          uv run --locked python scripts/check_remote_release_docs.py
+          uv run --locked python -m unittest tests.test_remote_release_docs -v
+      - name: Build fail-closed impact plan
+        id: plan
+        run: >-
+          uv run --locked python scripts/plan_evaluation_foundry_impact.py
+          --changed-from "origin/${{ github.event.pull_request.base.ref || 'main' }}"
+          --output impact-plan.json
+          --github-output "$GITHUB_OUTPUT"
+          --explain
+      - name: Upload impact plan
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          version: 10
+          name: impact-plan
+          path: impact-plan.json
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
+  adversarial-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Set up locked Python toolchain
+        uses: ./.github/actions/setup-locked-python
+      - name: Reject all reconstructed late-finding classes
+        run: >-
+          uv run --locked python scripts/check_heritage_adversarial.py
+          --output "$RUNNER_TEMP/adversarial-results.json"
+      - name: Upload deterministic adversarial receipt
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          node-version: 24
+          name: adversarial-gate-results
+          path: ${{ runner.temp }}/adversarial-results.json
+
+  context-assembly:
+    needs: adversarial-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 10.34.7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '26.12.1'
           cache: pnpm
           cache-dependency-path: apps/okf-explorer/pnpm-lock.yaml
+      - name: Set up locked Python toolchain
+        uses: ./.github/actions/setup-locked-python
+      - name: Install locked engine test dependencies
+        working-directory: apps/okf-explorer
+        run: pnpm install --frozen-lockfile
+      - name: Materialise SvelteKit TypeScript configuration
+        working-directory: apps/okf-explorer
+        run: pnpm exec svelte-kit sync
+      - name: Execute generic engine failure controls
+        working-directory: apps/okf-explorer
+        run: pnpm exec vitest run src/lib/context/context.test.ts src/lib/context/allocation.test.ts
+      - name: Execute independent contract and assessor controls
+        run: uv run --locked python -m unittest tests.test_context_assembly -v
+      - name: Check the isolated controlled-language experiment and retained measurements
+        run: |
+          uv run --locked python experiments/controlled-language/vendor/ste_lint.py --self-test
+          node --test tests/controlled_language.test.mjs
+      - name: Reject modified or unbounded archived comparison inputs
+        run: node --test validation/context-allocation/2026-09-21/admission.test.mjs
+      - name: Verify retained evidence archives and fail-closed delivery
+        run: node --experimental-strip-types --test tools/context-archive/archive.test.ts
+      - name: Replay the non-DWP end-to-end context case
+        run: >-
+          node --experimental-strip-types scripts/run_context_evaluation.mjs
+          --index tests/fixtures/context-study-club/index.json
+          --case tests/fixtures/context-study-club/case.json
+          --output tests/fixtures/context-study-club/execution-workbench-v2.json
+          --check
 
+  remote-mcp:
+    needs: adversarial-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '26.12.1'
+          cache: npm
+          cache-dependency-path: services/ask-okf-mcp/package-lock.json
+      - name: Install locked remote service dependencies
+        working-directory: services/ask-okf-mcp
+        run: npm ci --ignore-scripts
+      - name: Check the shared engine adapter types
+        working-directory: services/ask-okf-mcp
+        run: npm run check
+      - name: Test protocol, bundle binding and failure controls
+        working-directory: services/ask-okf-mcp
+        run: npm test
+      - name: Build the remote service from the shared engine
+        working-directory: services/ask-okf-mcp
+        run: npm run build
+
+  remote-mcp-browser:
+    needs: adversarial-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '26.12.1'
+          cache: npm
+          cache-dependency-path: services/ask-okf-mcp/package-lock.json
+      - name: Install locked remote service dependencies
+        working-directory: services/ask-okf-mcp
+        run: npm ci --ignore-scripts
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 10.34.7
+      - name: Install locked browser test dependencies
+        working-directory: apps/okf-explorer
+        run: pnpm install --frozen-lockfile
+      - name: Materialise browser test TypeScript configuration
+        working-directory: apps/okf-explorer
+        run: pnpm exec svelte-kit sync
+      - name: Verify the built evidence review page in Chrome
+        working-directory: apps/okf-explorer
+        run: pnpm exec playwright test --config playwright.service-review.config.ts --project chrome
+      - name: Retain service review browser evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: ask-okf-service-review-browser
+          path: |
+            output/playwright/service-review/
+            apps/okf-explorer/test-results/service-review/
+
+  python-contracts:
+    needs: [impact-plan, adversarial-gate, app]
+    if: needs.impact-plan.outputs.python == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Set up locked Python toolchain
+        uses: ./.github/actions/setup-locked-python
+      - name: Download exact app build for identity-bound Python contracts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: okf-explorer-app-build
+          path: apps/okf-explorer/build
+      - name: Run deterministic Python contracts
+        run: uv run --locked python -m unittest discover -s tests
+      - name: Validate Foundry facet regression artefact
+        run: >-
+          uv run --locked python scripts/check_foundry_facets.py
+          profiles/authoring/v1/domain-profile.template.yaml
+          --bundle tests/fixtures/foundry-facets/bundle.json
+      - name: Validate YAML-LD registry and constraints
+        run: |
+          uv run --locked python scripts/build_okf_registry.py --check
+          uv run --locked python scripts/check_source_constraints.py
+      - name: Validate impacted candidate planes
+        env:
+          IMPACT_BUILDER_FIXTURES: ${{ needs.impact-plan.outputs.builder_fixtures }}
+          IMPACT_BUILDER_PLANES: ${{ needs.impact-plan.outputs.builder_planes }}
+        run: >-
+          uv run --locked python scripts/check_impacted_heritage_evaluation.py
+          --fixtures-json "$IMPACT_BUILDER_FIXTURES"
+          --planes-json "$IMPACT_BUILDER_PLANES"
+
+  app:
+    needs: [impact-plan, adversarial-gate]
+    if: >-
+      needs.impact-plan.outputs.python == 'true' ||
+      needs.impact-plan.outputs.app == 'true' ||
+      needs.impact-plan.outputs.site == 'true' ||
+      needs.impact-plan.outputs.browser_targeted == 'true' ||
+      needs.impact-plan.outputs.browser_full == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 10.34.7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24.22.1'
+          cache: pnpm
+          cache-dependency-path: apps/okf-explorer/pnpm-lock.yaml
       - name: Install OKF Explorer dependencies
         working-directory: apps/okf-explorer
         run: pnpm install --frozen-lockfile
-
       - name: Validate Svelte OKF Explorer
         working-directory: apps/okf-explorer
         run: pnpm check
-
       - name: Run OKF Explorer tests
         working-directory: apps/okf-explorer
+        env:
+          PLAYWRIGHT_CHROMIUM_CHANNEL: chrome
         run: pnpm test
-
-      - name: Build Svelte OKF Explorer
+      - name: Check CycloneDX dependency inventory
         working-directory: apps/okf-explorer
-        run: pnpm build
-
-      - name: Run geospatial Map browser tests
+        run: pnpm sbom:check
+      - name: Prove deterministic Svelte OKF Explorer build
         working-directory: apps/okf-explorer
-        run: pnpm test:e2e
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
+        run: pnpm build:determinism
+      - name: Upload exact app build for Site assembly
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          python-version: "3.12"
+          name: okf-explorer-app-build
+          path: apps/okf-explorer/build
 
-      - name: Install semantic OKF dependencies
-        run: python3 -m pip install -r requirements-okf.txt
+  browser-targeted:
+    needs: [impact-plan, adversarial-gate, app]
+    if: needs.impact-plan.outputs.browser_targeted == 'true' && needs.impact-plan.outputs.browser_full != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 10.34.7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24.22.1'
+          cache: pnpm
+          cache-dependency-path: apps/okf-explorer/pnpm-lock.yaml
+      - working-directory: apps/okf-explorer
+        run: pnpm install --frozen-lockfile
+      - name: Materialise SvelteKit TypeScript configuration
+        working-directory: apps/okf-explorer
+        run: pnpm exec svelte-kit sync
+      - name: Run Warwickshire same-origin Chromium assurance
+        working-directory: apps/okf-explorer
+        run: pnpm test:e2e:warwickshire
 
-      - name: Run OKF generator tests
-        run: python3 -m unittest discover -s tests
-
-      - name: Validate YAML-LD registry and constraint ledger
+  browser-full:
+    needs: [impact-plan, adversarial-gate, app]
+    if: needs.impact-plan.outputs.browser_full == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 10.34.7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24.22.1'
+          cache: pnpm
+          cache-dependency-path: apps/okf-explorer/pnpm-lock.yaml
+      - name: Set up locked Python toolchain
+        uses: ./.github/actions/setup-locked-python
+      - working-directory: apps/okf-explorer
+        run: pnpm install --frozen-lockfile
+      - name: Materialise SvelteKit TypeScript configuration
+        working-directory: apps/okf-explorer
+        run: pnpm exec svelte-kit sync
+      - name: Download exact app build for Foundry browser assurance
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: okf-explorer-app-build
+          path: apps/okf-explorer/build
+      - name: Assemble Site for the Foundry browser suite
+        run: uv run --locked python scripts/build_site.py
+      - name: Select Ubuntu HTTPS archives for browser packages
+        timeout-minutes: 1
         run: |
-          python3 scripts/build_okf_registry.py --check
-          python3 scripts/check_source_constraints.py
+          printf '%s\n' \
+            'https://archive.ubuntu.com/ubuntu/' \
+            'https://security.ubuntu.com/ubuntu/' \
+            | sudo tee /etc/apt/apt-mirrors.txt > /dev/null
+      - name: Install Firefox and WebKit browser dependencies
+        working-directory: apps/okf-explorer
+        timeout-minutes: 10
+        run: pnpm exec playwright install --with-deps firefox webkit
+      - name: Run Warwickshire same-origin Chrome, Firefox and WebKit assurance
+        working-directory: apps/okf-explorer
+        run: pnpm test:e2e:warwickshire:terminal
 
-      - name: Generate UK Government API corpus from fixtures
+  foundry:
+    needs: [impact-plan, adversarial-gate]
+    if: needs.impact-plan.outputs.foundry == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Set up locked Python toolchain
+        uses: ./.github/actions/setup-locked-python
+      - name: Validate Evaluation Foundry fixtures
+        run: uv run --locked python scripts/check_evaluation_foundry.py
+      - name: Verify persisted public bases before the ordinary check
+        run: uv run --locked python scripts/retarget_heritage_source_snapshots.py --check
+      - name: Validate separate publication unit and rooted digests
+        run: >-
+          uv run --locked python scripts/export_publication_unit.py
+          --descriptor publication-units/heritage-coventry-warwickshire/publication-unit.json
+          --check
+
+  documentation:
+    needs: [impact-plan, adversarial-gate]
+    if: needs.impact-plan.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Set up locked Python toolchain
+        uses: ./.github/actions/setup-locked-python
+      - name: Validate bundle, viewer and OKF conformance
         run: |
-          python3 scripts/build_uk_government_api_okf.py \
-            --source tests/fixtures/uk_government_api_okf/api_catalogue.csv \
-            --ckan-fixture tests/fixtures/uk_government_api_okf/ckan_package_search.json \
-            --os-fixture tests/fixtures/uk_government_api_okf/os_api_tree.json \
-            --ons-fixture tests/fixtures/uk_government_api_okf/ons_payload.json \
-            --output "$RUNNER_TEMP/uk-government-apis-ci"
+          uv run --locked python scripts/build_okf_bundle.py --check
+          uv run --locked python scripts/update_viewer.py --check
+          uv run --locked python scripts/check_okf.py
 
-      - name: Generate legislation corpus from fixtures
+  site:
+    needs: [impact-plan, adversarial-gate, app]
+    if: always() && needs.impact-plan.result == 'success' && needs.adversarial-gate.result == 'success' && needs.impact-plan.outputs.site == 'true' && needs.app.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Set up locked Python toolchain
+        uses: ./.github/actions/setup-locked-python
+      - name: Download exact app build
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: okf-explorer-app-build
+          path: apps/okf-explorer/build
+      - name: Restore content-addressed Site components
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .site-components
+          # One key per immutable source revision ensures newly materialised
+          # components are saved; restore the previous content-addressed cache.
+          key: site-components-v3-${{ runner.os }}-${{ github.sha }}
+          restore-keys: site-components-v3-${{ runner.os }}-
+      - name: Build componentised static Site
+        run: uv run --locked python scripts/build_site.py --candidate-receipt "$RUNNER_TEMP/site-candidate-receipt.json"
+      - name: Upload candidate identity outside Site bytes
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: site-candidate-receipt
+          path: ${{ runner.temp }}/site-candidate-receipt.json
+
+  # Observation producer only. Retained-receipt gates remain independently required.
+  heritage-candidate-evidence:
+    needs: [impact-plan, adversarial-gate, app]
+    if: >-
+      needs.app.result == 'success' &&
+      (needs.impact-plan.outputs.app == 'true' || needs.impact-plan.outputs.site == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 10.34.7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24.22.1'
+          cache: pnpm
+          cache-dependency-path: apps/okf-explorer/pnpm-lock.yaml
+      - name: Set up locked Python toolchain
+        uses: ./.github/actions/setup-locked-python
+      - name: Install the locked evaluator dependency
+        working-directory: apps/okf-explorer
+        run: pnpm install --frozen-lockfile
+      - name: Check the bounded local evidence server
         run: |
-          python3 scripts/build_legislation_okf.py \
-            --fixture tests/fixtures/legislation_okf/sample.feed.xml \
-            --output "$RUNNER_TEMP/legislation-ci" \
-            --generated-at "2026-07-10T00:00:00Z"
-
-      - name: Regenerate legislation answer evaluation
+          node --test scripts/serve_heritage_candidate.test.mjs
+          uv run --locked python -m unittest tests.test_emit_heritage_candidate_transport -v
+      - name: Download this run's exact app build
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: okf-explorer-app-build
+          path: apps/okf-explorer/build
+      - name: Assemble the exact candidate and retain its source identity
         run: |
-          python3 scripts/build_legislation_evaluation.py
-          git diff --exit-code -- evaluation/legislation/questions.json
+          mkdir -p tmp/heritage-candidate
+          git rev-parse HEAD > tmp/heritage-candidate/source-commit.txt
+          uv run --locked python scripts/build_site.py --candidate-receipt tmp/heritage-candidate/site-candidate-receipt.json
+          cp apps/okf-explorer/build/okf-explorer-build-manifest.json tmp/heritage-candidate/
+          cp _site/okf-publication-identity.json tmp/heritage-candidate/
+      - name: Execute the unchanged canonical browser evaluation
+        env:
+          PLAYWRIGHT_PACKAGE: ${{ github.workspace }}/apps/okf-explorer/node_modules/@playwright/test
+          PLAYWRIGHT_EXECUTABLE_PATH: /opt/google/chrome/chrome
+        run: |
+          set -euo pipefail
+          test -x "$PLAYWRIGHT_EXECUTABLE_PATH"
+          node scripts/serve_heritage_candidate.mjs > "$RUNNER_TEMP/heritage-candidate-server.log" 2>&1 &
+          heritage_server_pid=$!
+          trap 'kill "$heritage_server_pid" 2>/dev/null || true' EXIT
+          node --input-type=module -e 'let ready=false;for(let n=0;n<50;n++){try{const r=await fetch("http://127.0.0.1:8002/publication/okf-explorer.json");if(r.ok){ready=true;break}}catch{}await new Promise(resolve=>setTimeout(resolve,100))}if(!ready)throw Error("Candidate server did not become ready");'
+          node scripts/evaluate_okf_explorer.mjs \
+            --base-url http://127.0.0.1:8002/ \
+            --bundle /publication/okf-explorer.json \
+            --suite evaluation-foundry/fixtures/heritage-warwickshire/questions.json \
+            --limit 100 --out tmp/heritage-candidate/questions
+          node scripts/evaluate_okf_explorer.mjs \
+            --base-url http://127.0.0.1:8002/ \
+            --candidate-bundle /okf-explorer.json \
+            --bundle-root http://127.0.0.1:8002/publication/ \
+            --journeys-only \
+            --journeys evaluation-foundry/fixtures/heritage-warwickshire/journeys.json \
+            --journey-id journey-tiny --journey-id journey-faithful \
+            --journey-id journey-synthetic-isolation --out tmp/heritage-candidate/journeys
+      - name: Emit bounded public observations for reviewed import
+        run: uv run --locked python scripts/emit_heritage_candidate_transport.py
+      - name: Retain fresh observations for reviewed materialisation
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: heritage-candidate-evidence-${{ github.sha }}
+          path: tmp/heritage-candidate/
+          if-no-files-found: error
+          retention-days: 7
 
-      - name: Validate published legislation corpus
-        run: python3 scripts/check_legislation_okf.py
+  release-policy:
+    needs: [impact-plan, adversarial-gate]
+    if: needs.impact-plan.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Set up locked Python toolchain
+        uses: ./.github/actions/setup-locked-python
+      - name: Validate draft promotion envelope contract
+        run: uv run --locked python scripts/check_promotion_envelope.py release-assurance/heritage-publication-envelope.json
 
-      - name: Check documentation lockstep
-        if: github.event_name == 'pull_request'
-        run: python3 scripts/check_documentation_lockstep.py --base "origin/${{ github.base_ref }}...HEAD"
-
-      - name: Validate OKF bundle
-        run: python3 scripts/build_okf_bundle.py --check
-
-      - name: Validate legacy OKF viewer
-        run: python3 scripts/update_viewer.py --check
-
-      - name: Check OKF conformance
-        run: python3 scripts/check_okf.py
-
-      - name: Build static site
-        run: python3 scripts/build_site.py
+  okf-explorer-ci:
+    if: always()
+    needs:
+      - impact-plan
+      - adversarial-gate
+      - context-assembly
+      - remote-mcp
+      - remote-mcp-browser
+      - python-contracts
+      - app
+      - browser-targeted
+      - browser-full
+      - foundry
+      - documentation
+      - site
+      - release-policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Set up locked Python toolchain
+        uses: ./.github/actions/setup-locked-python
+      - name: Preserve required-check compatibility
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          uv run --locked python -c 'import json,os,sys; n=json.loads(os.environ["RESULTS"]); bad={k:v["result"] for k,v in n.items() if v["result"] not in {"success","skipped"}}; print(json.dumps({k:v["result"] for k,v in n.items()},sort_keys=True)); sys.exit(bool(bad))'

@@ -1,5 +1,6 @@
-import type { LargeResourceReference } from '$lib/types';
+import { isMap, isScalar, isSeq, parseDocument } from 'yaml';
 import { requireSameOriginHttpUrl } from '$lib/security/urlPolicy';
+import type { FederationAccessRoute, LargeResourceReference, LargeSourceDisplayMode } from '$lib/types';
 import {
   type PreparedReleaseDataPlane,
   releaseDataRequest,
@@ -12,12 +13,42 @@ export const MAX_JSON_BYTES = 64 * 1024 * 1024;
 export const MAX_SOURCE_JSON_BYTES = 10 * 1024 * 1024;
 const RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 500, 502, 503, 504]);
 
+function fetchProfileUrl(url: string, init: RequestInit): Promise<Response> {
+  // The browser (including its search worker) must never fetch a bundle or
+  // descriptor resource outside the origin that serves this Warwickshire app.
+  const browserUrl = globalThis.location?.href;
+  const target = browserUrl ? requireSameOriginHttpUrl(url, browserUrl, 'Bundle request URL') : url;
+  return fetch(target, { ...init, redirect: 'error' });
+}
+
 export interface SourceJsonResponse {
   json: unknown;
   bytes: number;
   contentType: string;
   retrievedAt: string;
   responseUrl: string;
+}
+
+export type InlineSourceDisplayMode = Exclude<LargeSourceDisplayMode, 'link'>;
+
+export interface SourceResponse {
+  data: unknown;
+  text: string;
+  displayMode: InlineSourceDisplayMode;
+  bytes: number;
+  contentType: string;
+  retrievedAt: string;
+  responseUrl: string;
+}
+
+export interface StructuredDocumentResponse<T> {
+  document: T;
+  bytes: number;
+  contentType: string;
+  retrievedAt: string;
+  requestedUrl: string;
+  responseUrl: string;
+  attemptedUrls: string[];
 }
 
 export function resolveUrl(path: string, base: string): string {
@@ -41,7 +72,7 @@ export async function fetchJson<T>(url: string, timeoutMs = 30000, attempts = 3,
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const signal = typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal ? AbortSignal.timeout(timeoutMs) : undefined;
     try {
-      const response = await fetch(url, { cache: 'default', redirect: 'error', signal });
+      const response = await fetchProfileUrl(url, { cache: 'default', signal });
       if (!response.ok) {
         const error = new Error(`${url}: ${response.status} ${response.statusText}`);
         if (attempt < attempts - 1 && RETRYABLE_STATUS_CODES.has(response.status)) {
@@ -66,6 +97,196 @@ export async function fetchJson<T>(url: string, timeoutMs = 30000, attempts = 3,
     }
   }
   throw lastError instanceof Error ? lastError : new Error(`${url}: fetch failed`);
+}
+
+function yamlDocumentUrl(url: string): boolean {
+  try {
+    return /\.(?:ya?ml|yamlld)$/i.test(new URL(url).pathname);
+  } catch {
+    return /\.(?:ya?ml|yamlld)(?:[?#]|$)/i.test(url);
+  }
+}
+
+function yamlContentType(contentType: string): boolean {
+  return /^(?:application|text)\/(?:ld\+yaml|yaml|x-yaml)(?:;|$)/i.test(contentType.trim());
+}
+
+function validateYamlRepresentation(value: unknown, path = '$'): void {
+  if (typeof value === 'number' && !Number.isFinite(value)) {
+    throw new Error(`${path}: non-finite numbers are not valid YAML-LD`);
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => validateYamlRepresentation(item, `${path}[${index}]`));
+    return;
+  }
+  if (value && typeof value === 'object') {
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+      if (typeof key !== 'string') throw new Error(`${path}: YAML-LD mapping keys must be strings`);
+      validateYamlRepresentation(item, `${path}.${key}`);
+    }
+  }
+}
+
+function validateYamlMappingKeys(node: unknown, path = '$'): void {
+  if (isMap(node)) {
+    for (const pair of node.items) {
+      if (!isScalar(pair.key) || typeof pair.key.value !== 'string') {
+        throw new Error(`${path}: YAML-LD mapping keys must be strings`);
+      }
+      validateYamlMappingKeys(pair.value, `${path}.${pair.key.value}`);
+    }
+    return;
+  }
+  if (isSeq(node)) {
+    node.items.forEach((item, index) => validateYamlMappingKeys(item, `${path}[${index}]`));
+  }
+}
+
+/**
+ * Parse descriptor JSON or YAML-LD without executing tags or resolving remote
+ * contexts. JSON is recognized from its first non-whitespace byte even when a
+ * static host supplies application/octet-stream. YAML is accepted only when
+ * the URL or media type explicitly declares YAML, and uses the YAML 1.2 core
+ * schema with bounded aliases and unique mapping keys.
+ */
+export function parseStructuredDocumentText<T>(
+  text: string,
+  url: string,
+  contentType = ''
+): T {
+  const trimmed = text.trim();
+  if (!trimmed) throw new Error(`${url}: descriptor response is empty`);
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    return JSON.parse(trimmed) as T;
+  }
+  if (!yamlDocumentUrl(url) && !yamlContentType(contentType)) {
+    throw new Error(`${url}: response is neither JSON nor explicitly declared YAML-LD`);
+  }
+  const document = parseDocument(trimmed, {
+    version: '1.2',
+    schema: 'core',
+    merge: false,
+    strict: true,
+    uniqueKeys: true
+  });
+  if (document.errors.length) {
+    throw new Error(`${url}: invalid YAML-LD: ${document.errors.map((error) => error.message).join('; ')}`);
+  }
+  try {
+    validateYamlMappingKeys(document.contents);
+    const value = document.toJS({ maxAliasCount: 0 }) as T;
+    validateYamlRepresentation(value);
+    return value;
+  } catch (error) {
+    throw new Error(`${url}: unsafe or cyclic YAML-LD: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+export async function fetchStructuredDocument<T>(
+  url: string,
+  timeoutMs = 30000,
+  attempts = 3,
+  retryDelayMs = 250
+): Promise<StructuredDocumentResponse<T>> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const signal = typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal
+      ? AbortSignal.timeout(timeoutMs)
+      : undefined;
+    try {
+      const response = await fetchProfileUrl(url, {
+        cache: 'default',
+        headers: {
+          Accept: 'application/json, application/ld+json;q=0.95, application/ld+yaml;q=0.9, application/yaml;q=0.8'
+        },
+        signal
+      });
+      if (!response.ok) {
+        const error = new Error(`${url}: ${response.status} ${response.statusText}`);
+        if (attempt < attempts - 1 && RETRYABLE_STATUS_CODES.has(response.status)) {
+          lastError = error;
+          await retryDelay(retryDelayMs, attempt);
+          continue;
+        }
+        throw error;
+      }
+      const text = await readResponseText(response, url, MAX_JSON_BYTES);
+      const contentType = response.headers.get('content-type') || '';
+      const responseUrl = response.url || url;
+      const parsedResponseUrl = new URL(responseUrl);
+      if (!['http:', 'https:'].includes(parsedResponseUrl.protocol) || parsedResponseUrl.username || parsedResponseUrl.password) {
+        throw new Error(`${url}: response redirected to an unsafe descriptor URL`);
+      }
+      return {
+        document: parseStructuredDocumentText<T>(text, responseUrl, contentType),
+        bytes: new TextEncoder().encode(text).byteLength,
+        contentType,
+        retrievedAt: new Date().toISOString(),
+        requestedUrl: url,
+        responseUrl,
+        attemptedUrls: [url]
+      };
+    } catch (error) {
+      if (attempt < attempts - 1 && isRetryableFetchError(error)) {
+        lastError = error;
+        await retryDelay(retryDelayMs, attempt);
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(`${url}: fetch failed`);
+}
+
+export function declaredDescriptorCandidates(
+  primaryUrl: string,
+  routes: FederationAccessRoute[] = []
+): string[] {
+  const candidates = [{ url: primaryUrl, priority: Number.MIN_SAFE_INTEGER }, ...routes
+    .filter((route) =>
+      route?.url &&
+      (
+        route.purpose === 'descriptor' ||
+        (!route.purpose && ['published', 'raw'].includes(route.kind))
+      )
+    )
+    .map((route, index) => ({
+      url: resolveUrl(route.url, primaryUrl),
+      priority: Number.isFinite(route.priority) ? Number(route.priority) : index
+    }))
+    .sort((left, right) => left.priority - right.priority)];
+  return [...new Set(candidates.map((candidate) => candidate.url))];
+}
+
+export async function fetchStructuredDocumentWithFallback<T>(
+  primaryUrl: string,
+  routes: FederationAccessRoute[] = [],
+  timeoutMs = 30000,
+  attempts = 3,
+  retryDelayMs = 250
+): Promise<StructuredDocumentResponse<T>> {
+  const candidates = declaredDescriptorCandidates(primaryUrl, routes);
+  const attemptedUrls: string[] = [];
+  const failures: string[] = [];
+  for (const candidate of candidates) {
+    attemptedUrls.push(candidate);
+    try {
+      const result = await fetchStructuredDocument<T>(
+        candidate,
+        timeoutMs,
+        attempts,
+        retryDelayMs
+      );
+      return { ...result, requestedUrl: primaryUrl, attemptedUrls };
+    } catch (error) {
+      failures.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+  throw new Error(
+    `No declared descriptor route succeeded. Attempted ${attemptedUrls.join(', ')}. ` +
+    `Repository, documentation and archive links are never guessed or parsed as descriptors. ` +
+    `Failures: ${failures.join(' | ')}`
+  );
 }
 
 export type FetchJsonResourceOptions = {
@@ -114,7 +335,7 @@ function arrayBufferCopy(bytes: Uint8Array): ArrayBuffer {
   return buffer;
 }
 
-async function gunzipBoundedBytes(bytes: Uint8Array, label: string): Promise<Uint8Array> {
+async function gunzipBoundedBytes(bytes: Uint8Array, label: string, maxBytes = MAX_JSON_BYTES): Promise<Uint8Array> {
   if (typeof DecompressionStream === 'undefined') throw new Error(`This browser cannot decompress ${label}`);
   const body = new Response(arrayBufferCopy(bytes)).body;
   if (!body) throw new Error(`This browser cannot stream ${label}`);
@@ -125,9 +346,9 @@ async function gunzipBoundedBytes(bytes: Uint8Array, label: string): Promise<Uin
     const part = await reader.read();
     if (part.done) break;
     received += part.value.byteLength;
-    if (received > MAX_JSON_BYTES) {
+    if (received > maxBytes) {
       await reader.cancel().catch(() => {});
-      throw new Error(`${label} exceeds the ${MAX_JSON_BYTES}-byte decoded response limit`);
+      throw new Error(`${label} exceeds the ${maxBytes}-byte decoded response limit`);
     }
     chunks.push(part.value);
   }
@@ -158,6 +379,14 @@ export async function fetchJsonResource<T>(
     throw new Error(`Release data-plane index has no entry for ${path}`);
   }
   const url = distributed ? distributed.url : resolveUrl(path, baseUrl);
+  const declaredBytes =
+    typeof reference === 'object' &&
+    reference !== null &&
+    typeof reference.bytes === 'number' &&
+    Number.isSafeInteger(reference.bytes) &&
+    reference.bytes > 0
+      ? reference.bytes
+      : undefined;
   if (options.releaseDataPlane && new URL(url).origin !== new URL(baseUrl).origin) {
     throw new Error('Release data-plane resources must stay on the bundle origin');
   }
@@ -178,10 +407,9 @@ export async function fetchJsonResource<T>(
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const signal = typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal ? AbortSignal.timeout(timeoutMs) : undefined;
     try {
-      const response = await fetch(url, {
+      const response = await fetchProfileUrl(url, {
         cache: 'default',
         headers: distributed?.headers,
-        redirect: 'error',
         signal
       });
       if (!response.ok) {
@@ -209,7 +437,9 @@ export async function fetchJsonResource<T>(
       const bytes = await readResponseBytes(
         response,
         url,
-        distributed ? distributed.expectedPackedLength : MAX_JSON_BYTES
+        distributed
+          ? distributed.expectedPackedLength
+          : Math.min(MAX_JSON_BYTES, declaredBytes ?? MAX_JSON_BYTES)
       );
       if (distributed && (bytes[0] !== 0x1f || bytes[1] !== 0x8b)) {
         throw new Error('Release-pack transport member is not gzip-framed');
@@ -223,13 +453,18 @@ export async function fetchJsonResource<T>(
 
       let logicalBytes = bytes;
       if (distributed?.transportCompression === 'gzip') {
-        logicalBytes = await gunzipBoundedBytes(bytes, 'the release-pack transport member');
+        logicalBytes = await gunzipBoundedBytes(bytes, 'the release-pack transport member', distributed.expectedLength);
       }
       if (distributed && logicalBytes.byteLength !== distributed.expectedLength) {
         throw new Error('Release-pack decoded member length differs from the index');
       }
       if (distributed && (await sha256Hex(logicalBytes)) !== distributed.expectedHash) {
         throw new Error(`Logical resource integrity check failed for ${distributed.logicalPath}`);
+      }
+      if (declaredBytes !== undefined && logicalBytes.byteLength !== declaredBytes) {
+        throw new Error(
+          `${path}: resource byte length differs from the declared ${declaredBytes}-byte binding`
+        );
       }
 
       const logicalPath = distributed ? distributed.logicalPath : path;
@@ -262,11 +497,36 @@ export async function fetchSourceJson(
   attempts = 2,
   retryDelayMs = 250
 ): Promise<SourceJsonResponse> {
+  const response = await fetchSourceResponse(url, 'json', 'application/json', timeoutMs, attempts, retryDelayMs);
+  return {
+    json: response.data,
+    bytes: response.bytes,
+    contentType: response.contentType,
+    retrievedAt: response.retrievedAt,
+    responseUrl: response.responseUrl
+  };
+}
+
+export async function fetchSourceResponse(
+  url: string,
+  displayMode: InlineSourceDisplayMode,
+  mediaType = '',
+  timeoutMs = 15000,
+  attempts = 2,
+  retryDelayMs = 250
+): Promise<SourceResponse> {
   let lastError: unknown;
-  const candidates = sourceJsonCandidates(url);
+  const candidates = displayMode === 'json' ? sourceJsonCandidates(url) : [url];
   for (let candidateIndex = 0; candidateIndex < candidates.length; candidateIndex += 1) {
     try {
-      return await fetchSourceJsonCandidate(candidates[candidateIndex], timeoutMs, attempts, retryDelayMs);
+      return await fetchSourceResponseCandidate(
+        candidates[candidateIndex],
+        displayMode,
+        mediaType,
+        timeoutMs,
+        attempts,
+        retryDelayMs
+      );
     } catch (error) {
       lastError = error;
       if (candidateIndex === candidates.length - 1) throw error;
@@ -291,20 +551,33 @@ export function sourceJsonCandidates(url: string): string[] {
   return [url];
 }
 
-async function fetchSourceJsonCandidate(
+function sourceAcceptHeader(displayMode: InlineSourceDisplayMode, mediaType: string): string {
+  const declared = mediaType.trim();
+  const defaults: Record<InlineSourceDisplayMode, string> = {
+    json: 'application/json, application/*+json;q=0.9',
+    xml: 'application/xml, text/xml;q=0.9, application/*+xml;q=0.8',
+    text: 'text/plain, text/*;q=0.9'
+  };
+  return declared && !defaults[displayMode].startsWith(declared)
+    ? `${declared}, ${defaults[displayMode]}`
+    : defaults[displayMode];
+}
+
+async function fetchSourceResponseCandidate(
   url: string,
+  displayMode: InlineSourceDisplayMode,
+  mediaType: string,
   timeoutMs: number,
   attempts: number,
   retryDelayMs: number
-): Promise<SourceJsonResponse> {
+): Promise<SourceResponse> {
   let lastError: unknown;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const signal = typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal ? AbortSignal.timeout(timeoutMs) : undefined;
     try {
-      const response = await fetch(url, {
+      const response = await fetchProfileUrl(url, {
         cache: 'default',
-        headers: { Accept: 'application/json, application/*+json;q=0.9' },
-        redirect: 'error',
+        headers: { Accept: sourceAcceptHeader(displayMode, mediaType) },
         signal
       });
       if (!response.ok) {
@@ -322,9 +595,11 @@ async function fetchSourceJsonCandidate(
       }
       const text = await readResponseText(response, url, MAX_SOURCE_JSON_BYTES);
       return {
-        json: JSON.parse(text) as unknown,
+        data: displayMode === 'json' ? JSON.parse(text) as unknown : null,
+        text,
+        displayMode,
         bytes: new TextEncoder().encode(text).byteLength,
-        contentType: response.headers.get('content-type') || 'application/json',
+        contentType: response.headers.get('content-type') || mediaType || (displayMode === 'xml' ? 'application/xml' : displayMode === 'text' ? 'text/plain' : 'application/json'),
         retrievedAt: new Date().toISOString(),
         responseUrl: response.url || url
       };

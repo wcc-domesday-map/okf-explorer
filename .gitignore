@@ -9,6 +9,7 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+.uv-cache/
 
 .env
 .env.*
@@ -23,7 +24,20 @@ apps/*/build/
 apps/*/coverage/
 apps/*/test-results/
 apps/*/playwright-report/
+.okf-explorer-acceptance.lock
+.playwright-cli/
 .playwright-mcp/
 .pnpm-store/
+.site-components/
 
 evaluation/*/results/
+evaluation-foundry/fixtures/*/results/
+
+# Private SharePoint and Copilot experiment evidence.
+experiments/sharepoint-copilot/results/private/
+
+# Local-only raw evidence for generated public postmortems.
+postmortem/
+
+# Local research drafts are excluded from Git and Site assembly.
+/research/*.docx

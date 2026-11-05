@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import okf_semantic
+from learning_catalogue import build_learning_outputs
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "registry" / "okf-registry.yamlld"
@@ -18,6 +19,9 @@ OUTPUTS = {
     ROOT / "okf-registry.json": "legacy",
     ROOT / "apps" / "okf-explorer" / "static" / "okf-registry.json": "legacy",
     ROOT / "okf-registry.jsonld": "semantic",
+    ROOT / "apps/okf-explorer/src/lib/learning-registry.ts": "learning-registry",
+    ROOT / "apps/okf-explorer/src/lib/learning-catalogue.json": "learning-catalogue",
+    ROOT / "docs/onboarding/examples.md": "learning-docs",
 }
 
 
@@ -25,6 +29,11 @@ def id_value(value: Any) -> str:
     if isinstance(value, dict):
         return str(value.get("@id", ""))
     return str(value or "")
+
+
+def id_values(value: Any) -> list[str]:
+    values = value if isinstance(value, list) else [value]
+    return [item for item in (id_value(value) for value in values) if item]
 
 
 def build() -> dict[str, str]:
@@ -35,26 +44,50 @@ def build() -> dict[str, str]:
     for item in document.get("bundles", []):
         if not isinstance(item, dict):
             raise okf_semantic.SemanticError("registry bundles must be mappings")
+        schema_document = {"@context": document.get("@context"), **item}
+        schema_errors = okf_semantic.schema_errors(
+            schema_document,
+            "bundle.schema.json",
+        )
+        if schema_errors:
+            identity = item.get("@id", "<unknown>")
+            raise okf_semantic.SemanticError(
+                f"registry bundle {identity} fails bundle.schema.json: "
+                + " | ".join(schema_errors)
+            )
         descriptor = id_value(item.get("descriptor"))
         if not descriptor:
             raise okf_semantic.SemanticError(f"registry bundle {item.get('@id', '<unknown>')} has no descriptor")
-        bundles.append(
-            {
-                "id": str(item.get("@id", "")),
-                "label": str(item.get("title", "")),
-                "title": str(item.get("title", "")),
-                "url": descriptor,
-                "semantic_url": id_value(item.get("semanticDescriptor")),
-                "home_url": id_value(item.get("home")),
-                "profile": id_value(item.get("profile")),
-                "version": str(item.get("version", "")),
-                "status": str(item.get("status", "")),
-                "publisher": id_value(item.get("publisher")),
-                "license": id_value(item.get("license")),
-                "kind": str(item.get("recordTypeLabel", "bundle")),
-                "description": str(item.get("description", "")),
-            }
-        )
+        alternate_descriptors = id_values(item.get("descriptorAlternates", []))
+        bundle = {
+            "id": str(item.get("@id", "")),
+            "label": str(item.get("title", "")),
+            "title": str(item.get("title", "")),
+            "url": descriptor,
+            "semantic_url": id_value(item.get("semanticDescriptor")),
+            "home_url": id_value(item.get("home")),
+            "profile": id_value(item.get("profile")),
+            "version": str(item.get("version", "")),
+            "status": str(item.get("status", "")),
+            "publisher": id_value(item.get("publisher")),
+            "license": id_value(item.get("license")),
+            "kind": str(item.get("recordTypeLabel", "bundle")),
+            "description": str(item.get("description", "")),
+            "repository_url": id_value(item.get("repository")),
+            "documentation_url": id_value(item.get("documentation")),
+            "raw_subpath": str(item.get("rawSubpath", "")),
+            "release_archive_url": id_value(item.get("releaseArchive")),
+            "routes": [
+                {
+                    "kind": "raw" if "raw.githubusercontent.com" in url else "published",
+                    "purpose": "descriptor",
+                    "priority": (index + 1) * 10,
+                    "url": url,
+                }
+                for index, url in enumerate(alternate_descriptors)
+            ],
+        }
+        bundles.append({key: value for key, value in bundle.items() if value not in ("", [])})
     legacy = {
         "schema": "okf-explorer-registry.v1",
         "title": str(document.get("title", "OKF Explorer Registry")),
@@ -65,6 +98,7 @@ def build() -> dict[str, str]:
     return {
         "legacy": json.dumps(legacy, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         "semantic": okf_semantic.semantic_json(document),
+        **build_learning_outputs(bundles),
     }
 
 
@@ -93,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         rendered = build()
-    except okf_semantic.SemanticError as exc:
+    except (okf_semantic.SemanticError, ValueError, KeyError) as exc:
         print(f"registry build failed: {exc}", file=sys.stderr)
         return 1
     if args.check:

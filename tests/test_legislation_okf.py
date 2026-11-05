@@ -34,6 +34,8 @@ class LegislationOkfTests(unittest.TestCase):
         self.assertEqual(2, corpus["manifest"]["counts"]["works"])
         self.assertIn("document_type", corpus["facets"])
         self.assertIn("topic", corpus["facets"])
+        self.assertTrue(all(0 <= facet["expected_reduction"] <= 1 for facet in corpus["analysis"]["facet_analysis"]))
+        self.assertTrue(any(facet["entropy"] > 0 for facet in corpus["analysis"]["facet_analysis"]))
         self.assertGreater(corpus["manifest"]["counts"]["relationships"], 0)
         self.assertEqual("fnv1a32-prefix-2", corpus["relationship_adjacency"]["algorithm"])
         self.assertIn("relationship_adjacency", corpus["descriptor"]["entrypoints"])
@@ -51,6 +53,14 @@ class LegislationOkfTests(unittest.TestCase):
         self.assertIn(Path("access/search-lists-feeds.md"), files)
         descriptor = json.loads(files[Path("okf-explorer.json")])
         self.assertEqual("okf-large-corpus", descriptor["kind"])
+        self.assertEqual("0.2", descriptor["okf_version"])
+        self.assertTrue(files[Path("index.md")].startswith('---\nokf_version: "0.2"\n---'))
+        self.assertFalse(files[Path("ontology/index.md")].startswith("---"))
+        self.assertTrue(files[Path("log.md")].startswith("# Legislation OKF generation log\n\n## 2026-07-10"))
+        concept = files[Path("ontology/normalized-vocabulary.md")]
+        self.assertIn('generated: {"by": "process:legislation-okf-builder"', concept)
+        self.assertIn('sources: [{"id": "official-source"', concept)
+        self.assertNotIn("\ntimestamp:", concept)
         with tempfile.TemporaryDirectory() as temp:
             output = Path(temp)
             legislation.large_corpus.write_files(output, files)

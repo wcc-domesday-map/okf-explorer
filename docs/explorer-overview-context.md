@@ -87,6 +87,12 @@ analyse each dimension and recommend an appropriate control:
 - `suppressed`: dimensions with poor narrowing value, such as a field where
   nearly every record has the same value.
 
+Provider-authored presentation defaults and device-local user overrides are
+specified separately from generated analysis. See the
+[Facet presentation experiment](facet-presentation-experiment.md). It defines
+the `okf-explorer-presentation.v1` profile, compact distributions,
+high-cardinality search behaviour and the provider-to-user precedence model.
+
 ## Generated Analysis Artifact
 
 Large static corpora should expose an additive analysis artifact, for example:
@@ -304,6 +310,9 @@ hierarchy node reduces all views consistently.
 ## Ontology Analysis
 
 Ontology alignment is optional enrichment, not an OKF core requirement.
+The layered standards boundary, proposed semantic extension, relationship-type
+registry and inference/validation roadmap are defined in
+[Ontology and semantic graph architecture](ontology-and-semantic-graph-architecture-2026-07-24.md).
 
 The builder may inspect local or configured ontology packs, such as schema.org
 or SeeLinks data packs, and produce `ontology_candidates` in the analysis
@@ -447,3 +456,8 @@ The Explorer should:
   Markdown source corpus.
 - Which ontology registries are bundled, configured, or discovered locally.
 - How strict the facet-quality thresholds should be before a facet is hidden.
+
+The display-metadata transport decision is now settled experimentally: use an
+explicit `okf-explorer-presentation.v1` profile, embedded in or referenced by a
+large descriptor. Do not overload the term datapack and do not probe implicitly
+beside each `index.md`.
