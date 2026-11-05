@@ -52,13 +52,13 @@ class ReleaseMetadataTest(unittest.TestCase):
         citation = CITATION.read_text(encoding="utf-8")
         changelog = CHANGELOG.read_text(encoding="utf-8")
 
-        self.assertEqual("0.8.1", package_version)
+        self.assertEqual("0.8.1-warwickshire.1", package_version)
         self.assertEqual(
-            [package_version, package_version],
+            [package_version, "0.8.1"],
             re.findall(r"^\s*version:\s*\"([^\"]+)\"\s*$", citation, re.MULTILINE),
         )
         self.assertEqual(
-            ["2026-11-03", "2026-11-03"],
+            ["2026-11-03"],
             re.findall(
                 r"^\s*date-released:\s*\"([^\"]+)\"\s*$",
                 citation,
@@ -139,9 +139,8 @@ class ReleaseMetadataTest(unittest.TestCase):
         self.assertIn("const second = await buildCleanSnapshot();", proof)
         self.assertIn("tree_sha256", proof)
         self.assertIn("index_sha256", proof)
-        for workflow_path in (CI_WORKFLOW, PAGES_WORKFLOW):
-            workflow = workflow_path.read_text(encoding="utf-8")
-            self.assertIn("run: pnpm build:determinism", workflow)
+        self.assertIn("run: pnpm build:determinism", CI_WORKFLOW.read_text(encoding="utf-8"))
+        self.assertIn("Standalone GitHub Pages publication is disabled", PAGES_WORKFLOW.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

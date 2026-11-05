@@ -183,32 +183,29 @@ class CiPublicationTopologyTests(unittest.TestCase):
         targeted = workflow[
             workflow.index("  browser-targeted:") : workflow.index("\n  browser-full:")
         ]
-        self.assertIn("run_impacted_browser_tests.mjs", targeted)
-        self.assertIn("IMPACT_TEST_TAGS", targeted)
-        self.assertIn("IMPACT_JOURNEY_GROUPS", targeted)
-        self.assertIn("steps.browser-plan.outputs.requires_site", targeted)
-        self.assertIn("pnpm test:e2e:impacted", targeted)
+        self.assertIn("pnpm test:e2e:warwickshire", targeted)
+        self.assertNotIn("pnpm test:e2e:impacted", targeted)
         self.assertLess(
             targeted.index("pnpm install --frozen-lockfile"),
             targeted.index("pnpm exec svelte-kit sync"),
         )
         self.assertLess(
             targeted.index("pnpm exec svelte-kit sync"),
-            targeted.index("pnpm test:e2e:impacted"),
+            targeted.index("pnpm test:e2e:warwickshire"),
         )
 
         full = workflow[
             workflow.index("  browser-full:") : workflow.index("\n  foundry:")
         ]
         self.assertIn("uv run --locked python scripts/build_site.py", full)
-        self.assertIn("pnpm test:e2e:terminal", full)
+        self.assertIn("pnpm test:e2e:warwickshire:terminal", full)
         self.assertLess(
             full.index("pnpm install --frozen-lockfile"),
             full.index("pnpm exec svelte-kit sync"),
         )
         self.assertLess(
             full.index("pnpm exec svelte-kit sync"),
-            full.index("pnpm test:e2e:terminal"),
+            full.index("pnpm test:e2e:warwickshire:terminal"),
         )
 
     def test_heritage_observation_producer_does_not_replace_retained_gates(self) -> None:
@@ -246,72 +243,20 @@ class CiPublicationTopologyTests(unittest.TestCase):
         self.assertEqual("tmp/heritage-candidate/", upload["with"]["path"])
         self.assertEqual(7, upload["with"]["retention-days"])
 
-    def test_pages_uses_push_impact_and_external_pack_does_not_key_main_cache(
+    def test_standalone_pages_is_disabled_for_warwickshire(
         self,
     ) -> None:
         workflow = self.text(".github/workflows/pages.yml")
         document = YAML(typ="safe").load(workflow)
         jobs = self.workflow_jobs(".github/workflows/pages.yml")
-        self.assertNotIn("permissions", document)
-        for job_name in ("impact", "adversarial-gate", "app", "verify"):
-            with self.subTest(job=job_name):
-                self.assertEqual({"contents": "read"}, jobs[job_name]["permissions"])
-        self.assertEqual(
-            {"contents": "read", "pages": "read"},
-            jobs["build"]["permissions"],
-        )
-        self.assertEqual(
-            {"pages": "write", "id-token": "write"},
-            jobs["deploy"]["permissions"],
-        )
-        self.assertEqual(10, jobs["impact"]["timeout-minutes"])
-        self.assertEqual(10, jobs["adversarial-gate"]["timeout-minutes"])
-        self.assertEqual(30, jobs["app"]["timeout-minutes"])
-        self.assertEqual(45, jobs["build"]["timeout-minutes"])
-        self.assertEqual(10, jobs["deploy"]["timeout-minutes"])
-        self.assertEqual(10, jobs["verify"]["timeout-minutes"])
-        self.assertIn("--changed-from HEAD^", workflow)
-        self.assertIn("needs.impact.outputs.foundry", workflow)
-        self.assertNotIn("'evaluation/**'", workflow)
-        self.assertIn(".site-components", workflow)
-        self.assertIn("site-components-v3-${{ runner.os }}-${{ github.sha }}", workflow)
-        self.assertNotIn("hashFiles('evaluation/heritage", workflow)
-        self.assertIn("site-candidate-receipt.json", workflow)
-        self.assertIn("scripts/check_documentation_lockstep.py --base HEAD^", workflow)
-        self.assertIn("scripts/build_okf_estate_registry.py --check", workflow)
-        self.assertIn('--publication-commit "${{ github.sha }}"', workflow)
-        self.assertIn("check_impacted_heritage_evaluation.py", workflow)
-        self.assertLess(
-            workflow.index("retarget_heritage_source_snapshots.py --check"),
-            workflow.index("check_impacted_heritage_evaluation.py"),
-        )
-        self.assertEqual(1, workflow.count("check_heritage_adversarial.py"))
-        self.assertEqual(
-            {"impact", "adversarial-gate"}, self.job_needs(jobs["app"])
-        )
-        self.assertEqual(
-            {"impact", "adversarial-gate", "app"},
-            self.job_needs(jobs["build"]),
-        )
-        self.assertEqual({"deploy"}, self.job_needs(jobs["verify"]))
-        verify = workflow[workflow.index("  verify:") :]
-        self.assertIn("verify_okf_deployment.mjs", verify)
-        self.assertIn("--journey estate-registry", verify)
-        self.assertIn('--expected-commit "${{ github.sha }}"', verify)
-        self.assertNotIn("playwright install", verify)
-        self.assertNotIn("build_site.py", verify)
-        pages_upload = next(
-            step
-            for step in jobs["build"]["steps"]
-            if str(step.get("uses", "")).startswith(
-                "actions/upload-pages-artifact@"
-            )
-        )
-        self.assertIs(
-            True,
-            pages_upload["with"]["include-hidden-files"],
-            "the candidate receipt includes .nojekyll, so the Pages archive must too",
-        )
+        self.assertEqual({"contents": "read"}, document["permissions"])
+        self.assertEqual({"standalone-pages-disabled"}, set(jobs))
+        self.assertEqual({"workflow_dispatch"}, set(document["on"]))
+        guard = jobs["standalone-pages-disabled"]["steps"][0]["run"]
+        self.assertIn("Standalone GitHub Pages publication is disabled", guard)
+        self.assertIn("exit 1", guard)
+        self.assertNotIn("deploy-pages", workflow)
+        self.assertNotIn("upload-pages-artifact", workflow)
 
     def test_nightly_shadow_and_observers_are_separate(self) -> None:
         shadow = self.text(".github/workflows/foundry-full-shadow.yml")
@@ -329,7 +274,7 @@ class CiPublicationTopologyTests(unittest.TestCase):
         self.assertEqual(45, shadow_jobs["browser-three-engine"]["timeout-minutes"])
         self.assertEqual(45, shadow_jobs["foundry-full-family"]["timeout-minutes"])
         self.assertIn("uv run --locked python scripts/build_site.py", shadow)
-        self.assertIn("pnpm test:e2e:terminal", shadow)
+        self.assertIn("pnpm test:e2e:warwickshire:terminal", shadow)
         self.assertIn("--check --fixture all", shadow)
         self.assertLess(
             shadow.index("retarget_heritage_source_snapshots.py --check"),
@@ -405,7 +350,7 @@ class CiPublicationTopologyTests(unittest.TestCase):
         )
         self.assertLess(
             shadow_browser.index("pnpm exec svelte-kit sync"),
-            shadow_browser.index("pnpm test:e2e:terminal"),
+            shadow_browser.index("pnpm test:e2e:warwickshire:terminal"),
         )
         self.assertIn("schedule:", links)
         self.assertIn("observe_link_intents.py", links)

@@ -804,15 +804,12 @@ class EvaluationFoundryValidatorTests(unittest.TestCase):
         ):
             self.assertTrue(any(fragment in error for error in errors), fragment)
 
-    def test_ci_and_pages_workflows_run_the_validator(self) -> None:
-        for workflow in (
-            ROOT / ".github" / "workflows" / "okf-explorer-ci.yml",
-            ROOT / ".github" / "workflows" / "pages.yml",
-        ):
-            self.assertIn(
-                "uv run --locked python scripts/check_evaluation_foundry.py",
-                workflow.read_text(encoding="utf-8"),
-            )
+    def test_ci_validates_foundry_while_standalone_pages_is_disabled(self) -> None:
+        ci = (ROOT / ".github" / "workflows" / "okf-explorer-ci.yml").read_text(encoding="utf-8")
+        pages = (ROOT / ".github" / "workflows" / "pages.yml").read_text(encoding="utf-8")
+        self.assertIn("uv run --locked python scripts/check_evaluation_foundry.py", ci)
+        self.assertIn("Standalone GitHub Pages publication is disabled", pages)
+        self.assertNotIn("deploy-pages", pages)
 
     def test_heritage_suite_and_journeys_match_the_real_evaluator(self) -> None:
         family = (

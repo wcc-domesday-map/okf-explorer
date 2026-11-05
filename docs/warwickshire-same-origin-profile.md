@@ -76,12 +76,17 @@ pnpm build
 pnpm test:e2e:warwickshire:terminal
 ```
 
-Post-deployment browser tests require an explicitly reviewed URL; no public
+For a locally assembled site, set the exact `/knowledge/` base URL; no public
 upstream URL is embedded in the package script:
 
 ```sh
-PLAYWRIGHT_BASE_URL=https://reviewed-restricted-site.example/knowledge/ pnpm test:e2e:pages
+PLAYWRIGHT_BASE_URL=http://127.0.0.1:4317/knowledge/ pnpm test:e2e:pages
 ```
+
+Protected deployment acceptance still requires an authenticated real-browser
+check of the exact deployed commit, intended journey, same-origin assets and
+console under the parent repository's private Pages runbook. This local smoke
+check does not supply a private Pages login.
 
 The inherited upstream browser suites use cross-origin fixture bundles and
 cannot exercise this same-origin profile as written. The fork CI runs the

@@ -17,6 +17,8 @@
   browser coverage gap in the profile documentation.
 - Regenerate version-bound semantic projections and the CycloneDX inventory
   with the Warwickshire fork identity.
+- Align release and CI topology tests with the fork's guarded Pages workflow
+  while retaining the Foundry, deterministic build and same-origin checks.
 
 ## v0.8.1 - 2026-11-03 - Legislation release acceptance correction
 
