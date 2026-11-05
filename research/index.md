@@ -1,14 +1,22 @@
----
-type: "Index"
-title: "Research & benchmarks"
-description: "The tool-use and federated-learning research lineage."
-tags: [index]
-timestamp: 2026-06-27T00:00:00Z
----
-
 # Research & benchmarks
 
 The tool-use and federated-learning research lineage.
+
+## Bounded evidence package research
+
+- [Curated BEP research and provenance](../docs/bep-research.html) explains the
+  retained 19 September briefs, reports and reconstructed examples. These are
+  research proposals, not source evidence or a deployed BEP standard.
+
+## OKF Authoring Research
+
+- [Open data for the Explore OKF pilot](explore-okf-open-data-test-candidates.md)
+  selects a bounded Coventry everyday-services journey and authoritative UK
+  sources for testing readable graph labels, useful semantic linking,
+  CPSV-AP/SKOS mappings and multi-resolution geography before reviewing
+  `okf-uk-living`.
+
+## AI And Tool-Use Research
 
 - [FedAvg — McMahan et al. (2017)](fedavg.md) — Communication-efficient decentralised training by model averaging.
 - [Google keyboard FL — Hard et al. (2018)](google-keyboard-fl.md) — On-device federated training for next-word prediction at production scale.

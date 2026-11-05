@@ -1,0 +1,280 @@
+# OKF Authoring Profile v1
+
+Status: experimental production profile, 29 July 2026.
+
+This profile defines the bounded handoff between domain research and an OKF
+bundle build. It exists so a builder can reuse domain decisions without
+receiving an enormous research transcript or silently inventing missing
+semantics.
+
+The profile URI is:
+
+`https://chris-page-gov.github.io/okf-explorer/profile/authoring/v1/`
+
+Its machine contract is
+[`domain-profile.schema.json`](domain-profile.schema.json). A complete,
+schema-valid example is
+[`domain-profile.template.yaml`](domain-profile.template.yaml).
+
+## What This Profile Is
+
+An `okf-domain-profile.v1` document is a research and control artefact. It
+freezes:
+
+- purpose, scope, exclusions and any completeness denominator;
+- repository classification, bootstrap evidence, initialisation-only commit
+  policy, source/generated boundaries, CI state and clean-work handoff;
+- source, semantic, operational and decision authority;
+- the collection's document families, representations, formats, languages,
+  extraction constraints and sensitivity findings;
+- material research claims with separate claim, workflow, derivation,
+  authority, confidence and evidence fields;
+- source access, rights, privacy, freshness and acquisition evidence;
+- user roles, tasks, evidence needs and hard failures;
+- source-native terminology, entities, identifiers, versions and
+  relationships;
+- useful external-link coverage against declared eligible-entity denominators;
+- a human-readable presentation contract and compact label index for every
+  graph-reachable entity;
+- a snapshot-bound Explore OKF publication state, persistent banner
+  and route-preserving feedback contract;
+- the exact standards selected for the domain and how each will be tested;
+- the smallest justified OKF/Explorer publication architecture;
+- the exact downstream consumers, their executable package/version/commit/lock
+  identity and the producer-to-plane-to-consumer impact graph;
+- a two-stage tiny-fixture protocol that validates producer bytes first and
+  then executes the actual locked consumers;
+- per-plane digest roots, invalidation triggers and selective-rerun closure;
+- backward and forward producer/consumer compatibility expectations;
+- the explicit producer/consumer compatibility window and unsupported-input
+  behaviour;
+- post-deploy deep links whose bundle identity and restored state must be
+  checked;
+- validation, evaluation, unresolved gaps and owner decisions; and
+- traceability from intended outcomes to planned artefacts and checks.
+
+It is not the knowledge graph, an ontology, a licence decision, or evidence
+that the eventual bundle passed its release gates.
+
+## Fixed Interoperability Floor
+
+All builds retain the permissive [OKF v0.2 core][okf-spec]. The Foundry
+production profile normally adds stable identity, provenance, rights/access,
+coverage, lifecycle, freshness, traceability, deterministic generation and
+evaluation, but these additions must not be described as requirements of OKF
+core.
+
+When semantic publication is justified, use:
+
+- YAML 1.2.2 and the exact dated [YAML-LD 1.0 Working Draft][yaml-ld] selected
+  during warm-up;
+- JSON-LD 1.1, its API and framing specifications where applicable;
+- RDF 1.1 and RDF Dataset Canonicalization 1.0 for semantic digests;
+- pinned, allowlisted contexts;
+- JSON Schema 2020-12 for control and projection documents; and
+- SHACL for closed-world RDF publication checks.
+
+YAML-LD is a Working Draft, not a W3C Recommendation. A build must record the
+exact official publication it tested. It must not copy a prompt's old
+"latest" date.
+
+## Standards Applicability
+
+Every candidate standard receives exactly one applicability decision:
+
+| Decision | Meaning |
+|---|---|
+| `normative` | The selected publication claims and tests conformance. |
+| `projection` | A generated representation maps to the standard without replacing source meaning. |
+| `source-native` | The source already uses it and the bundle preserves that form. |
+| `conditional` | It applies only when a recorded condition is met. |
+| `reference-only` | It informs analysis but creates no production assertion or conformance claim. |
+| `not-applicable` | It was assessed and deliberately excluded, with a reason. |
+
+Similar field names are not conformance. A standard marked `normative` must
+name the exact version, conformance artefact and validator/test suite.
+
+## Orthogonal Evidence Axes
+
+Do not overload one `status` or one score. Record independently:
+
+- source/assertion authority;
+- derivation (`source-native`, `normalized`, `rule-derived`,
+  `model-assisted`, or `expert-asserted`);
+- OKF verification trust;
+- research-claim status;
+- freshness;
+- source availability;
+- coverage against a named denominator;
+- concept lifecycle; and
+- release lifecycle.
+
+Confidence cannot upgrade authority. A numeric confidence value is meaningful
+only when a calibration method and evidence are declared.
+
+## Change And Build Rules
+
+- Hash-lock an approved domain profile and its evidence register.
+- For an empty or imported target, run
+  `uv run --locked python scripts/okf_repository_bootstrap.py TARGET` as a dry run before
+  `--apply`. Non-empty and dirty targets require `--adopt-existing`; existing
+  files are preserved and the tool never initializes Git, creates remotes,
+  commits, enables CI, pushes or publishes.
+- Pin every release-relevant consumer to an exact release, commit, binary,
+  container or dependency-lock digest in one checksummed consumer lock.
+- Maintain an explicit dependency graph from producer and input through each
+  digest plane, consumer and public route. Every edge names its change impact
+  and validation closure.
+- A builder consumes that exact profile; it does not rewrite it.
+- Only unresolved decisions explicitly marked `blocking_for_build: true`
+  prevent the smallest viable build.
+- A semantic scope or standards change requires a new profile version or a
+  recorded decision override.
+- Non-blocking uncertainty becomes a visible gap or constraint, not an
+  invented value.
+- Begin every implementation with a two-stage tiny fixture. Stage 1 builds and
+  validates positive, negative, stale, unavailable, conflicting, unsafe and
+  digest-mismatch cases twice. Stage 2 executes every required locked consumer
+  against those exact bytes; schema-only or mocked substitutes do not close
+  the consumer gate.
+- Give control, data, search, semantic, presentation and release planes their
+  own applicable digest roots. Rerun only the transitive impacted planes and
+  consumers proven by the graph; a timestamp or an assertion that a change is
+  harmless is not reuse evidence.
+- Test compatibility in both directions: new producer output with every
+  supported consumer, and retained supported producer fixtures with the new
+  consumer.
+- Freeze and assure one release candidate, then promote identical bytes.
+- After deployment, open the exact public overview, record, search/filter and
+  other selected deep links in the actual consumer. Verify bundle identity,
+  snapshot, restored view/state, expected content and applicable plane roots;
+  HTTP 200 alone is insufficient.
+- Withhold every public bundle URL until that exact deployed URL passes the
+  browser identity and journey check. Give the check 60 seconds tool-first,
+  report failures immediately, label an unverified link explicitly and limit
+  correction to the dependency-graph closure instead of rebuilding silently.
+
+## Consumer Contract
+
+`consumer_contract` remains optional. A profile that otherwise satisfies the
+current v1 schema may omit it; new or materially revised Foundry profiles
+should populate it from the public template. It contains:
+
+- `inventory`, `lock` and exact consumer `executable_identity`;
+- `dependency_graph`;
+- `fixture_protocol.producer_stage` and `consumer_stage`;
+- independently rooted `planes`;
+- a compatibility-window decision and two-direction `compatibility` cases;
+  and
+- `post_deploy_deep_links`.
+
+An approved profile that uses this contract must have a real consumer-lock
+SHA-256. The semantic validator also checks lock/inventory equivalence,
+consumer and plane references, required-consumer execution, both compatibility
+directions and deep-link coverage.
+
+## Required domain facets
+
+New Foundry builds require `presentation_contract.domain_facets`, including
+minimal and exploratory packs. Define at least two task-based dimensions and
+link their consumer, validation gate, vocabularies, missing values, field paths
+and exact filtering cases. Run `scripts/check_foundry_facets.py` against the
+actual output as a blocking check, followed by actual-consumer browser checks.
+See [Required facets for new Foundry bundles](../../../docs/foundry-facets.md).
+Existing optional consumer-contract compatibility in the profile validator does
+not waive the emitted-artefact gate's requirement for a declared consumer.
+This authoring policy does not change the OKF 0.2 core or legacy Reader loading.
+
+## Required Explore OKF Controls
+
+Every conforming `okf-domain-profile.v1` document includes
+`semantic_linking`, `presentation_contract` and `exploratory_publication`.
+They are required at the research handoff so a build cannot postpone citizen
+readability, evidenced external linking or honest exploratory status until
+release review:
+
+- `semantic_linking` measures justified external links against eligible entity
+  denominators rather than rewarding raw triple count;
+- `presentation_contract` prevents stable identifiers from leaking into
+  citizen-facing labels and requires a compact label index at relationship
+  projection granularity; and
+- `exploratory_publication` defines a visibly incomplete, immutable learning
+  snapshot that can receive route-preserving feedback before candidate freeze.
+
+Each semantic link set names one eligible-entity denominator and carries an
+evidence-backed coverage result. The denominator binds its deterministic
+eligibility rule and canonical, sorted candidate-ID digest to the frozen input
+snapshot and evidence register; approved profiles cannot use an unknown input
+or candidate digest. The eligible candidates are partitioned by exact IDs into
+mutually exclusive `linked`, `unresolved`, `excluded` and `conflicting`
+outcomes. Their union must equal the denominator exactly. Achieved coverage is the
+linked count divided by the eligible count minus evidenced exclusions (or 100
+per cent when that effective denominator is empty), rounded to two decimal
+places. Every exclusion result names its declared rule, lists the stable unique
+identifiers of the exact candidates removed and cites evidence; its count must
+equal that list, every ID must occur in the denominator's exact candidate list,
+and a candidate cannot occur in two exclusion results. The denominator's
+eligible count must itself equal its unique candidate-ID list. The
+profile separately counts linked candidates and link assertions, because one
+candidate can have several justified links. An identity-bearing assertion
+ledger must cover every linked candidate and no other outcome. Every assertion
+has one identity-bound dereference result; assertion, attempt, success and
+failure counts are derived from those ledgers rather than trusted as free
+aggregates.
+
+This is deliberately a **declared-inventory** guarantee, not an open-world
+proof. The validator proves that the author-declared candidate IDs, snapshot,
+digest, outcomes, assertions and evidence reconcile. It cannot discover an
+entity that the eligibility rule wrongly omitted. Before approval, a domain
+reviewer or owner must therefore assess the rule against the frozen source
+snapshot and record support-checked, digest-bound evidence for that boundary.
+
+Mapping strength and predicate are one governed decision. SKOS mapping
+relations require their corresponding SKOS predicate; identity requires
+`owl:sameAs` plus independently verified, digest-bound assertion evidence;
+and a domain relationship cannot conceal an identity or SKOS mapping
+predicate. Each target must belong to the declared HTTP namespace under
+URI-aware origin and path/hash rules; percent-encoded path delimiters cannot be
+used to manufacture namespace membership. Duplicate candidate-target
+assertions are rejected rather than counted twice.
+
+The result records its observation time, structured maximum-age policy,
+freshness status and evidence references. Freshness is calculated
+deterministically against the profile's `prepared_at` clock, rather than the
+validator's wall clock. The v1 freshness policy is fail-closed: an approved
+profile cannot rely on a stale result. Every semantic ledger reference in an
+approved profile must resolve to support-checked or independently verified,
+digest-bound evidence. `coverage_result_sha256` commits the complete result as
+canonical UTF-8 JSON while retaining ledger array order. One approval-grade
+evidence item must carry that exact digest and the result's exact observation
+time; separate or unrelated witnesses do not satisfy approval. Dereference
+outcomes are derived from a machine-readable terminal kind and HTTP status,
+not from descriptive text. An approved profile must also meet every declared
+minimum coverage percentage. These controls prevent an unexplained aggregate
+“semantic completeness” score from concealing unresolved or stale link work.
+
+Explorer v0.7.0 implements these behaviours through the strict
+[Explore OKF profile](../../explore-okf/v1/index.md). The actual pinned
+consumer must still pass the profile's endpoint-label and exploratory-banner
+journeys before a particular public snapshot claims Explore OKF conformance;
+declaring the profile fields alone is not evidence of a successful journey.
+
+The Explorer package exposes the generic actual-consumer command:
+
+```sh
+pnpm --dir apps/okf-explorer acceptance:bundle -- \
+  --bundle-root /path/to/bundle \
+  --journeys /path/to/journeys.json \
+  --output /path/to/external-runtime-acceptance.json
+```
+
+The receipt binds the Explorer source commit and dirty state, dependency lock,
+runner, deterministic build manifest, bundle tree and descriptor identity to
+the journey manifest, requests, console/page errors, restored URL state and
+terminal outcome.
+
+The copy-ready prompts and complete workflow are in the
+[OKF Foundry prompt kit](../../../docs/okf-authoring-prompt-kit.md).
+
+[okf-spec]: https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/3fcbb9f828c2f23d109c855ee403c3a4c81f3a96/okf/SPEC.md
+[yaml-ld]: https://www.w3.org/TR/yaml-ld-10/

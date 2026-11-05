@@ -1,7 +1,12 @@
 {
-  "profile": "OKF v0.1 + explorer bundle",
+  "profile": "OKF v0.2 + Bundle Wiki YAML-LD semantic profile v1",
   "siteTitle": "OKF Explorer",
   "defaultBundle": "okf-bundle.json",
+  "semanticMarkdownExclusions": [
+    "profiles/publication-method/",
+    "research/bep-research-2026-09-19/",
+    "research/bep_research_A_RECONSTRUCTED_2026-09-19/"
+  ],
   "corpora": [
     {
       "id": "ai-infrastructure-wiki",

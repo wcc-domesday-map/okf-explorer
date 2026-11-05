@@ -1,0 +1,1261 @@
+import { expect, test, type Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+
+import {
+  ELS_ALIGNED_RECORD_NAME,
+  ELS_RECORD_NAME,
+  ELS_RESOURCE_ID,
+  ELS_UNREVIEWED_RECORD_NAME,
+  ONS_FACET_BUNDLE_URL,
+  ONS_RECORD_COUNT,
+  ONS_REGION_COUNT,
+  displayedFacetOrder,
+  facetSection,
+  facetSegment,
+  facetValue,
+  installOnsFacetFixture,
+  openOnsFacetFixture,
+  suggestedFacetKeys
+} from './fixtures/ons-facets.fixture';
+
+test('FACET-E2E-18 keeps local search, counts and folds coherent without a worker', async ({ page }) => {
+  const requests = await openOnsFacetFixture(page, [], { withoutSearch: true });
+  await facetToggle(page, 'geography_level').click();
+  await facetValue(page, 'geography_level', 'region').click();
+  const resultRows = page.locator('[data-okf-ranked-results="primary"] [data-okf-ranked-result]');
+  await expect(page.getByText('382 highlighted / 420 in scope', { exact: true })).toBeVisible();
+  await expect(page.locator('[data-okf-ranked-results="primary"] [data-highlighted="true"]')).toHaveCount(382);
+  await page.getByRole('button', { name: 'Fold highlighted', exact: true }).click();
+  await expect(resultRows).toHaveCount(38);
+  await facetToggle(page, 'geography_level').click();
+  await page.getByRole('button', { name: 'Clear highlight', exact: true }).click();
+  await expect(resultRows).toHaveCount(38);
+  await expect(page.locator('.folded-set')).toContainText('0 highlighted / 382 in scope');
+  await page.locator('.folded-set').getByRole('button', { name: /Unfold/ }).click();
+  await expect(resultRows).toHaveCount(420);
+  await page.getByPlaceholder('Search ONS products, concepts and geographies').fill('average house price');
+  await expect(resultRows).toHaveCount(1);
+  await expect(resultRows).toContainText('Average house price');
+  await expect(page.getByText(/simple local text search/)).toBeVisible();
+  await page.reload();
+  await expect(resultRows).toHaveCount(1);
+  expect(requests.some(path => path.startsWith('/search/'))).toBe(false);
+});
+
+function facetToggle(page: Page, key: string) {
+  return facetSection(page, key).locator('.facet-toggle');
+}
+
+function facetActions(page: Page, key: string) {
+  return facetSection(page, key).getByRole('button', { name: `Actions for ${key.replaceAll('_', ' ')}` });
+}
+
+function filterValues(page: Page, key: string): Promise<string[]> {
+  return page.evaluate((facetKey) => new URL(location.href).searchParams.getAll(`filter.${facetKey}`), key);
+}
+
+async function waitForFilter(page: Page, key: string, values: string[]) {
+  await expect.poll(() => filterValues(page, key)).toEqual(values);
+}
+
+async function waitForFixtureReady(page: Page) {
+  await page.getByPlaceholder('Search ONS products, concepts and geographies').waitFor({ state: 'attached' });
+  await facetSection(page, 'derivation_mode').waitFor({ state: 'attached' });
+  await page.getByText('Preparing static search index...').waitFor({ state: 'hidden' });
+}
+
+async function installClipboard(page: Page) {
+  await page.context().addInitScript(() => {
+    let copied = '';
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: async (value: string) => { copied = String(value); },
+        readText: async () => copied
+      }
+    });
+  });
+}
+
+async function dragFacetOnto(page: Page, sourceKey: string, targetKey: string) {
+  const source = facetSection(page, sourceKey).getByRole('button', { name: `Reorder ${sourceKey.replaceAll('_', ' ')}` });
+  const target = facetSection(page, targetKey);
+  await expect(source).toHaveAttribute('draggable', 'true');
+  const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+  await source.dispatchEvent('dragstart', { dataTransfer });
+  await target.dispatchEvent('dragover', { dataTransfer });
+  await target.dispatchEvent('drop', { dataTransfer });
+  await source.dispatchEvent('dragend', { dataTransfer });
+  await dataTransfer.dispose();
+}
+
+const HUGE_FACET_ORIGIN = 'https://huge-facets.fixture.test';
+const HUGE_FACET_URL = `${HUGE_FACET_ORIGIN}/okf-explorer.json`;
+const hugeFacetRows = {
+  category: [
+    { value: 'eu-origin', count: 159_773 },
+    { value: 'secondary', count: 155_712 },
+    { value: 'primary', count: 43_170 },
+    { value: 'draft', count: 7_131 }
+  ]
+};
+
+async function installHugeNoPostingsFixture(page: Page, requestLog: string[]) {
+  await page.context().route(`${HUGE_FACET_ORIGIN}/**`, async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    requestLog.push(path);
+    const respond = (body: unknown, status = 200) => route.fulfill({
+      status,
+      contentType: 'application/json',
+      headers: { 'access-control-allow-origin': '*' },
+      body: JSON.stringify(body)
+    });
+    if (path === '/okf-explorer.json') return respond({
+      schema: 'okf-explorer-large-corpus.v1',
+      kind: 'okf-large-corpus',
+      title: 'Huge legislation facet fixture',
+      description: 'A large corpus whose legacy search index has no filter postings.',
+      counts: { datasets: 365_786, records: 365_786, relationships: 853_883 },
+      vocabulary: { record_plural: 'legal works', search_placeholder: 'Search legislation' },
+      entrypoints: {
+        data_manifest: 'data/manifest.json',
+        overview_index: 'data/overview.json',
+        analysis_overview: 'data/analysis.json',
+        search_manifest: 'search/manifest.json'
+      }
+    });
+    if (path === '/data/manifest.json') return respond({
+      title: 'Huge legislation facet fixture',
+      generated_at: '2026-07-25T00:00:00Z',
+      counts: { datasets: 365_786, records: 365_786, relationships: 853_883 },
+      indexes: {
+        overview: 'data/overview.json',
+        analysis: 'data/analysis.json',
+        facets: 'data/facets.json',
+        search: 'search/manifest.json'
+      },
+      chunks: {
+        datasets: ['data/works-0.json.gz', 'data/works-1.json.gz'],
+        resources: [],
+        publishers: [],
+        relationships: ['data/relationships-0.json.gz']
+      }
+    });
+    if (path === '/data/overview.json') return respond({
+      schema: 'okf-overview.v1',
+      title: 'Huge legislation facet fixture',
+      generated_at: '2026-07-25T00:00:00Z',
+      counts: { datasets: 365_786, records: 365_786, relationships: 853_883 },
+      facet_previews: hugeFacetRows
+    });
+    if (path === '/data/analysis.json') return respond({
+      schema: 'okf-explorer-analysis.v1',
+      generated_at: '2026-07-25T00:00:00Z',
+      summary: { title: 'Legislation overview', record_count: 365_786, relationship_count: 853_883 },
+      facet_analysis: [{
+        key: 'category',
+        label: 'Category',
+        coverage: 1,
+        cardinality: 4,
+        top_share: 0.44,
+        entropy: 0.8,
+        expected_reduction: 0.56,
+        recommended_control: 'searchable multi-select',
+        recommendation: 'primary',
+        value_type: 'nominal',
+        values: hugeFacetRows.category
+      }]
+    });
+    if (path === '/data/facets.json') return respond(hugeFacetRows);
+    if (path === '/search/manifest.json') {
+      await new Promise((resolve) => setTimeout(resolve, 1_200));
+      return respond({
+        schema: 'okf-static-search.v1',
+        token_min_length: 2,
+        prefix_min_length: 3,
+        lexicon_shard_length: 2,
+        result_limit: 200,
+        result_doc_chunk_size: 1000,
+        weights: {},
+        field_masks: {},
+        counts: {
+          documents: 365_786,
+          max_postings_per_token: 10_000,
+          postings_shards: 0,
+          doc_map_shards: 1
+        },
+        entrypoints: {
+          lexicon: {},
+          prefixes: {},
+          postings: [],
+          result_docs: [],
+          facets: 'data/facets.json',
+          doc_map: 'search/doc-map.json'
+        }
+      });
+    }
+    if (path === '/search/doc-map.json') return respond({});
+    if (path.startsWith('/data/works-')) return respond([{ name: 'must-not-load', title: 'Must not load' }]);
+    if (path.startsWith('/data/relationships-')) {
+      return respond([{ source: 'dataset/must-not-load', target: 'dataset/must-not-load', kind: 'must-not-load' }]);
+    }
+    return respond({ error: `No fixture for ${path}` }, 404);
+  });
+}
+
+test.describe('large-corpus facet interaction contract', () => {
+  for (const width of [1440, 650, 390, 320]) {
+    test(`FACET-E2E-DENSITY keeps folded colour bars compact and accessible at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await openOnsFacetFixture(page, [], { skewedCounts: true });
+      if (width < 1100) await page.getByRole('navigation', { name: 'Workspace panels' }).getByRole('button', { name: /^Search & (facets|details)$/ }).click();
+      const facet = facetSection(page, 'population_type');
+      const toggle = facet.locator('.facet-toggle');
+      await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      await expect(page.locator('.facet-instructions .bar-legend')).toBeHidden();
+      const before = (await facet.boundingBox())!;
+      expect(before.height).toBeLessThanOrEqual(64);
+      expect((await facet.locator('.proportional-bar').boundingBox())!.height).toBeLessThanOrEqual(16);
+
+      const summary = facet.locator('.facet-quick-values summary');
+      const header = (await facet.locator('.facet-header').boundingBox())!;
+      const summaryBounds = (await summary.boundingBox())!;
+      expect(summaryBounds.y).toBeGreaterThanOrEqual(header.y);
+      expect(summaryBounds.y + summaryBounds.height).toBeLessThanOrEqual(header.y + header.height + 1);
+      expect(summaryBounds.width).toBeGreaterThanOrEqual(36);
+      expect(summaryBounds.height).toBeGreaterThanOrEqual(36);
+      await summary.focus();
+      await summary.press('Enter');
+      const controls = facet.locator('.facet-quick-values .quick-value');
+      await expect(controls).toHaveCount(10);
+      expect((await facet.boundingBox())!.height).toBeCloseTo(before.height, 0);
+      for (const bounds of await controls.evaluateAll(elements => elements.map(element => {
+        const bounds = element.getBoundingClientRect();
+        return { width: bounds.width, height: bounds.height };
+      }))) {
+        expect(bounds.width).toBeGreaterThanOrEqual(24);
+        expect(bounds.height).toBeGreaterThanOrEqual(24);
+      }
+      const rare = controls.last();
+      await rare.focus();
+      await rare.press('Enter');
+      await expect(rare).toHaveAttribute('aria-pressed', 'true');
+      await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      await rare.press('Escape');
+      await expect(summary).toBeFocused();
+      await expect(rare).toBeHidden();
+      // These labels contain no numbers, so counts in their human labels cannot
+      // accidentally mask a missing visible colour index in an accessible name.
+      const labelledFacet = facetSection(page, 'derivation_mode');
+      await labelledFacet.locator('.facet-quick-values summary').click();
+      const labelledControls = labelledFacet.locator('.facet-quick-values .quick-value');
+      for (const control of await labelledControls.all()) {
+        const visibleIndex = (await control.innerText()).trim();
+        await expect(control).toHaveAccessibleName(new RegExp(`^${visibleIndex}: `));
+      }
+      const paletteAxe = await new AxeBuilder({ page }).include('[data-facet-key="derivation_mode"] .quick-grid').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze();
+      expect(paletteAxe.violations).toEqual([]);
+      await labelledControls.first().press('Escape');
+      await toggle.click();
+      await expect(facet.locator('.facet-values .facet-value')).toHaveCount(10);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+      const axe = await new AxeBuilder({ page }).include('.facet-sections').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze();
+      expect(axe.violations.filter(violation => violation.impact === 'serious' || violation.impact === 'critical')).toEqual([]);
+    });
+  }
+
+  for (const width of [1440, 800]) {
+    test(`FACET-E2E-TOUCH keeps skewed proportional bars and usable controls at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 1000 });
+      await openOnsFacetFixture(page, [], { skewedCounts: true });
+      if (width < 1100) await page.getByRole('navigation', { name: 'Workspace panels' }).getByRole('button', { name: 'Search & details' }).click();
+      const facet = facetSection(page, 'population_type');
+      await expect(facet).toBeVisible();
+      const visual = facet.locator('.proportional-bar .bar-segment');
+      await expect(visual).toHaveCount(10);
+      const widths = await visual.evaluateAll(elements => elements.map(element => element.getBoundingClientRect().width));
+      expect(widths[0] / widths.reduce((sum, value) => sum + value, 0)).toBeGreaterThan(0.95);
+      const summary = facet.locator('.facet-quick-values summary');
+      const summarySize = await summary.evaluate(element => ({ width: element.getBoundingClientRect().width, height: element.getBoundingClientRect().height }));
+      expect(summarySize.width).toBeGreaterThanOrEqual(24);
+      expect(summarySize.height).toBeGreaterThanOrEqual(24);
+      await summary.click();
+      const controls = facet.locator('.facet-quick-values .quick-value');
+      await expect(controls).toHaveCount(10);
+      const sizes = await controls.evaluateAll(elements => elements.map(element => {
+        const bounds = element.getBoundingClientRect();
+        return { width: bounds.width, height: bounds.height };
+      }));
+      expect(sizes.every(size => size.width >= 24 && size.height >= 24)).toBe(true);
+      expect(await facet.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+      const tiny = controls.filter({ has: page.getByText('10', { exact: true }) });
+      await tiny.focus();
+      await page.keyboard.press('Enter');
+      await expect(tiny).toHaveAttribute('aria-pressed', 'true');
+      await facetToggle(page, 'population_type').click();
+      await expect(facet.locator('.facet-values .facet-value')).toHaveCount(10);
+      const axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze();
+      expect(axe.violations.filter(violation => violation.id === 'target-size').flatMap(violation => violation.nodes.map(node => node.target))).toEqual([]);
+    });
+  }
+
+  test('FACET-E2E-01 retains provider inventory and bounded selectable facet summaries', async ({ page }) => {
+    const requests: string[] = []; await openOnsFacetFixture(page, requests);
+    await expect(page.getByText('ONS facet interaction fixture', { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole('tablist', { name: 'Left panel' }).getByRole('tab')).toHaveText(['Facets', 'Browse', 'Results']);
+    expect(await displayedFacetOrder(page)).toEqual([...suggestedFacetKeys]);
+    for (const key of suggestedFacetKeys) {
+      await expect(facetToggle(page, key)).toHaveAttribute('aria-expanded', 'false');
+      const facet = facetSection(page, key);
+      await expect(facet.getByRole('group', { name: /colour selections/ })).toBeVisible();
+      const segments = facet.locator('.bar-segment');
+      expect(await segments.count()).toBeGreaterThan(0);
+      expect(await segments.count()).toBeLessThanOrEqual(17);
+      await expect(facet.locator('.facet-distribution button')).toHaveCount(0);
+      const label = await facet.locator('.facet-toggle strong').innerText();
+      const disclosure = facet.locator('.facet-header').getByLabel(`Colour controls for ${label}`, { exact: true });
+      await expect(disclosure).toBeVisible();
+      const controls = facet.locator('.facet-quick-values .quick-value');
+      await expect(controls.first()).toBeHidden();
+      await disclosure.click();
+      await expect(controls.first()).toBeVisible();
+      await expect(controls).toHaveCount(await segments.count());
+      await expect(controls.first()).toBeEnabled();
+      await controls.first().focus();
+      await expect(controls.first()).toBeFocused();
+      await controls.first().press('Escape');
+      await expect(disclosure).toBeFocused();
+      await expect(controls.first()).toBeHidden();
+    }
+    await expect(page.getByLabel('Select multiple values')).toBeVisible();
+    expect(requests.filter(path => path.startsWith('/data/records-'))).toEqual([]);
+  });
+
+
+  test('FACET-E2E-01A keeps overview-first bundle responses below one MiB', async ({ page }) => {
+    const requests: string[] = [];
+    const responseBytes: number[] = [];
+    await openOnsFacetFixture(page, requests, {
+      responseBytes,
+      // Make an accidental eager filter-posting fetch unambiguously breach the
+      // budget while leaving the compact overview/control plane unchanged.
+      filterPaddingBytes: 1_100_000
+    });
+    await page.waitForLoadState('networkidle');
+
+    expect(requests.filter((path) => path.startsWith('/search/filter-'))).toEqual([]);
+    expect(responseBytes.reduce((total, bytes) => total + bytes, 0)).toBeLessThan(1_048_576);
+    await expect(facetSection(page, 'derivation_mode').locator('.facet-distribution')).toBeVisible();
+    const bars = page.locator('.facet-distribution .bar-segment:visible');
+    expect(await bars.count()).toBeGreaterThan(0);
+    const colours = await bars.evaluateAll(elements => [...new Set(elements.map(element => getComputedStyle(element).backgroundColor))]);
+    expect(colours.length).toBeGreaterThanOrEqual(2);
+    expect(colours.every(colour => colour !== 'rgba(0, 0, 0, 0)')).toBe(true);
+  });
+
+  test('FACET-E2E-12 opens complete facet indexes without hydrating a huge record plane', async ({ page }) => {
+    const requests: string[] = [];
+    await installHugeNoPostingsFixture(page, requests);
+    await page.goto(`?bundle=${encodeURIComponent(HUGE_FACET_URL)}#overview`);
+
+    const category = facetSection(page, 'category');
+    await expect(category).toBeVisible();
+    await expect(category.locator('.facet-toggle small')).toHaveText('4 values');
+    await expect(category.locator('.facet-distribution')).toBeVisible();
+    await expect(category.locator('.bar-segment')).toHaveCount(4);
+
+    await facetToggle(page, 'category').click();
+    await expect(category.locator('.facet-values [data-facet-value]')).toHaveCount(4);
+    await expect(page.getByText('Loading record index...')).toHaveCount(0);
+    expect(requests.filter((path) => path.startsWith('/data/works-'))).toEqual([]);
+
+    await page.getByRole('button', { name: 'Links', exact: true }).click();
+    await page.getByRole('button', { name: /Load full relationship index/ }).click();
+    await expect(page.locator('.error')).toContainText(
+      'Full relationship hydration is disabled for this 853,883-relationship bundle'
+    );
+    expect(requests.filter((path) => path.startsWith('/data/relationships-'))).toEqual([]);
+
+    await page.setViewportSize({ width: 640, height: 900 });
+    await expect(page.locator('.left-panel')).not.toBeVisible();
+    await expect(page.locator('.stage')).toBeVisible();
+    await page.getByRole('navigation', { name: 'Workspace panels' }).getByRole('button', { name: /^Search & (facets|details)$/ }).click();
+    await expect(page.locator('.left-panel')).toBeVisible();
+    await expect(page.locator('.stage')).not.toBeVisible();
+  });
+
+  test('FACET-E2E-02 previews complete sets, combines facets and commits the complement', async ({ page }) => {
+    await openOnsFacetFixture(page);
+    await facetToggle(page, 'geography_level').click();
+    await facetValue(page, 'geography_level', 'region').click();
+    await expect(page.getByText('382 highlighted / 420 in scope', { exact: true })).toBeVisible();
+    await expect(page.locator('[data-okf-ranked-results="primary"] [data-okf-ranked-result]')).toHaveCount(200);
+    await page.getByLabel('Select multiple values').check();
+    await facetValue(page, 'geography_level', 'country').click();
+    await expect.poll(() => page.evaluate(() => JSON.parse(new URL(location.href).searchParams.get('explore')!).preview.geography_level.length)).toBe(2);
+    await page.getByLabel('Select multiple values').uncheck();
+    await facetValue(page, 'geography_level', 'country').click();
+    await page.getByRole('button', { name: 'Keep unhighlighted', exact: true }).click();
+    await expect(page.getByText('0 highlighted / 38 in scope', { exact: true })).toBeVisible();
+    await page.reload(); await expect(page.getByText('0 highlighted / 38 in scope', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Undo keep (1)', exact: true }).click();
+    await expect(page.getByText('382 highlighted / 420 in scope', { exact: true })).toBeVisible();
+  });
+
+
+  test('FACET-E2E-02A folds a complete set without hydrating the full record plane', async ({ page }) => {
+    const requests: string[] = []; await openOnsFacetFixture(page, requests);
+    await facetToggle(page, 'geography_level').click(); await facetValue(page, 'geography_level', 'region').click();
+    await expect(page.getByText('382 highlighted / 420 in scope', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Fold highlighted', exact: true }).click();
+    await expect(page.locator('.folded-set')).toContainText('382 saved');
+    await expect(page.getByText('382 highlighted / 420 in scope', { exact: true })).toBeVisible();
+    await page.locator('.folded-set').getByRole('button', { name: /Unfold/ }).click();
+    await expect(page.locator('[data-okf-ranked-results="primary"] [data-okf-ranked-result]')).toHaveCount(200);
+    expect(requests.filter(path => path.startsWith('/data/records-'))).toEqual([]);
+  });
+
+
+  test('FACET-E2E-02B keeps direct metadata-route counts aligned with card previews', async ({
+    page
+  }) => {
+    const requests: string[] = [];
+    await installOnsFacetFixture(page.context(), requests);
+    await page.goto(
+      `?bundle=${encodeURIComponent(ONS_FACET_BUNDLE_URL)}#topic/Economy`
+    );
+    await waitForFixtureReady(page);
+
+    const details = page.locator('.right-panel');
+    await expect(details.getByRole('heading', { name: 'Economy', exact: true })).toBeVisible();
+    await expect(details.locator('[data-detail-field="matched-records"]')).toContainText(
+      '47 in whole corpus'
+    );
+    await expect(details.locator('[data-detail-field="record-preview"]')).toContainText(
+      'loaded of 47'
+    );
+    await expect(details.locator('[data-detail-field="record-preview"]')).not.toContainText(
+      'loaded of 0'
+    );
+    expect(requests).not.toContain('/data/datasets.json');
+  });
+
+  test('FACET-E2E-03 bounds high-cardinality summaries and searches the complete value list', async ({ page }) => {
+    await openOnsFacetFixture(page); await facetToggle(page, 'population_type').click();
+    const facet = facetSection(page, 'population_type');
+    expect(await facet.locator('.bar-segment').count()).toBeLessThanOrEqual(17);
+    await facet.getByRole('textbox', { name: 'Find values in population type' }).fill('Population group 20');
+    await facetValue(page, 'population_type', 'Population group 20').click();
+    await expect.poll(() => page.evaluate(() => JSON.parse(new URL(location.href).searchParams.get('explore')!).preview.population_type)).toEqual(['Population group 20']);
+    await facetValue(page, 'population_type', 'Population group 20').press('Alt+Enter');
+    await expect.poll(() => page.evaluate(() => JSON.parse(new URL(location.href).searchParams.get('explore')!).reductions.length)).toBe(1);
+  });
+
+
+  test('FACET-E2E-04 pins several open facets directly and persists the open workspace', async ({ page }) => {
+    await openOnsFacetFixture(page);
+
+    for (const key of ['derivation_mode', 'geography_level']) {
+      const pin = facetSection(page, key).getByRole('button', { name: `Pin ${key.replaceAll('_', ' ')}` });
+      await pin.click();
+      await expect(facetToggle(page, key)).toHaveAttribute('aria-expanded', 'true');
+      await expect(facetSection(page, key)).toHaveClass(/pinned/);
+    }
+    await expect(facetToggle(page, 'derivation_mode')).toHaveAttribute('aria-expanded', 'true');
+    await expect(facetToggle(page, 'geography_level')).toHaveAttribute('aria-expanded', 'true');
+
+    await page.reload();
+    await waitForFixtureReady(page);
+    for (const key of ['derivation_mode', 'geography_level']) {
+      await expect(facetToggle(page, key)).toHaveAttribute('aria-expanded', 'false');
+      await expect(facetSection(page, key)).toHaveClass(/pinned/);
+      await expect(facetSection(page, key).getByRole('button', { name: `Unpin ${key.replaceAll('_', ' ')}` })).toHaveAttribute('aria-pressed', 'true');
+    }
+  });
+
+  test('FACET-E2E-05 reorders using accessible controls and preserves provider reset', async ({ page }) => {
+    await openOnsFacetFixture(page);
+    for (let i = 0; i < 4; i++) {
+      const facet = facetSection(page, 'topic');
+      if ((await facet.locator('.facet-options').getAttribute('open')) === null) await facet.locator('.facet-options summary').click();
+      await facet.getByRole('button', { name: 'Move up', exact: true }).click();
+    }
+    expect((await displayedFacetOrder(page))[0]).toBe('topic');
+    await page.reload(); await waitForFixtureReady(page); expect((await displayedFacetOrder(page))[0]).toBe('topic');
+    await facetSection(page, 'state').locator('.facet-options summary').click();
+    await facetSection(page, 'state').getByRole('button', { name: 'Hide facet', exact: true }).click();
+    await expect(facetSection(page, 'state')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Guidance', exact: true }).click();
+    await expect(page.getByText('What makes a useful facet?')).toBeVisible();
+    await page.getByRole('button', { name: 'Reset facet layout', exact: true }).click();
+    expect(await displayedFacetOrder(page)).toEqual([...suggestedFacetKeys]);
+  });
+
+
+  test('FACET-E2E-06 preserves the exact nested geography count across bounded Graph navigation', async ({ page }) => {
+    const requests: string[] = [];
+    await openOnsFacetFixture(page, requests);
+    expect(requests).not.toContain('/data/datasets.json');
+
+    await page.goto(`?bundle=${encodeURIComponent(ONS_FACET_BUNDLE_URL)}&filter.geography_level=region#facet/geography_level/region`);
+    await waitForFixtureReady(page);
+    await waitForFilter(page, 'geography_level', ['region']);
+    await expect(page.locator('[data-metric="ons-metadata-records-matching"] strong')).toHaveText(String(ONS_REGION_COUNT));
+    await expect(page.getByText(`200 shown of ${ONS_REGION_COUNT} matching records (the result display limit was reached)`)).toBeVisible();
+    await expect(page.locator('[data-detail-field="matched-records"]')).toHaveText(`${ONS_REGION_COUNT} in current reduction`);
+    expect(requests).not.toContain('/data/datasets.json');
+
+    await page.getByLabel('Views').getByRole('button', { name: 'Graph', exact: true }).click();
+    await expect(page.getByRole('group', { name: 'Large corpus graph' })).toBeVisible();
+    expect(requests).not.toContain('/data/datasets.json');
+    await expect(page.locator('[data-detail-field="matched-records"]')).toHaveText(`${ONS_REGION_COUNT} in current reduction`);
+
+    await page.getByLabel('Views').getByRole('button', { name: 'Reader', exact: true }).click();
+    await expect(page.locator('[data-metric="ons-metadata-records-matching"] strong')).toHaveText(String(ONS_REGION_COUNT));
+    await expect(page.locator('[data-detail-field="matched-records"]')).toHaveText(`${ONS_REGION_COUNT} in current reduction`);
+
+    await page.getByRole('tab', { name: 'Results' }).click();
+    await expect(page.getByRole('heading', { name: 'Search matches' })).toBeVisible();
+    await expect(page.getByText('200 retrieved records.')).toBeVisible();
+    expect(requests).not.toContain('/data/datasets.json');
+    await page.getByRole('tab', { name: 'Facets' }).click();
+
+    const firstResult = page.locator('.result-list').getByRole('button').first();
+    const firstResultTitle = await firstResult.locator('h2').innerText();
+    await firstResult.click();
+    const rightPanel = page.locator('.right-panel');
+    await expect(rightPanel.getByRole('heading', { name: firstResultTitle })).toBeVisible();
+    await expect(rightPanel.getByRole('button', { name: 'Load full record' })).toBeVisible();
+    expect(requests).not.toContain('/data/datasets.json');
+
+    await expect(page.locator('[data-metric="active-filters"] strong')).toHaveText('1');
+    expect(ONS_RECORD_COUNT).toBeGreaterThan(ONS_REGION_COUNT);
+  });
+
+  test('FACET-E2E-07 distinguishes the governed snapshot from a bounded reviewed live reference', async ({ page }) => {
+    const requests: string[] = [];
+    await installOnsFacetFixture(page.context(), requests);
+    await page.goto(`?bundle=${encodeURIComponent(ONS_FACET_BUNDLE_URL)}#overview`);
+    await waitForFixtureReady(page);
+
+    const bundleProviderStatus = page.locator(
+      '.stage [data-provider-datapack="ons-explore-local-statistics"][data-provider-scope="bundle"]'
+    );
+    await expect(bundleProviderStatus).toHaveCount(1);
+    await expect(
+      page.locator(
+        '[data-provider-datapack="ons-explore-local-statistics"][data-provider-scope="bundle"]'
+      )
+    ).toHaveCount(1);
+    await expect(bundleProviderStatus).toHaveAttribute('data-comparison-status', 'known-drift');
+    await expect(bundleProviderStatus.getByText('Known snapshot/live difference')).toBeVisible();
+    await expect(bundleProviderStatus.getByText('Governed snapshot', { exact: true })).toHaveCount(1);
+    await expect(bundleProviderStatus).toContainText('revision as of 22 Jul 2026');
+    await expect(bundleProviderStatus).toContainText('Review checked 23 Jul 2026');
+    const bundleLiveAction = bundleProviderStatus.getByRole('link', {
+      name: 'Open live service on ONS Explore Local Statistics (external)'
+    });
+    await expect(bundleLiveAction).toHaveAttribute(
+      'href',
+      'https://www.ons.gov.uk/explore-local-statistics/'
+    );
+    await expect(bundleLiveAction).toHaveClass(/primary-provider-action/);
+    await expect(
+      bundleProviderStatus.getByRole('link', {
+        name: 'Open live indicator on ONS Explore Local Statistics (external)'
+      })
+    ).toHaveCount(0);
+
+    await page.goto(
+      `?bundle=${encodeURIComponent(ONS_FACET_BUNDLE_URL)}#dataset/${ELS_ALIGNED_RECORD_NAME}`
+    );
+    await page.getByText('Preparing static search index...').waitFor({ state: 'hidden' });
+    const rightPanel = page.locator('.right-panel');
+    const alignedProviderStatus = rightPanel.locator(
+      '[data-provider-datapack="ons-explore-local-statistics"][data-provider-scope="record"]'
+    );
+    await expect(alignedProviderStatus).toHaveAttribute(
+      'data-comparison-status',
+      'aligned-reviewed-fields'
+    );
+    await expect(alignedProviderStatus.getByText('Aligned in reviewed fields')).toBeVisible();
+    await expect(alignedProviderStatus).toContainText(
+      'No difference was recorded in the reviewed fields for this record. This is not an exhaustive live comparison.'
+    );
+    await expect(alignedProviderStatus).not.toContainText(
+      'Average house price extends to May 2026'
+    );
+
+    await page.goto(
+      `?bundle=${encodeURIComponent(ONS_FACET_BUNDLE_URL)}#dataset/${ELS_UNREVIEWED_RECORD_NAME}`
+    );
+    await page.getByText('Preparing static search index...').waitFor({ state: 'hidden' });
+    const unreviewedProviderStatus = rightPanel.locator(
+      '[data-provider-datapack="ons-explore-local-statistics"][data-provider-scope="record"]'
+    );
+    await expect(unreviewedProviderStatus).toHaveAttribute(
+      'data-comparison-status',
+      'not-reviewed'
+    );
+    await expect(
+      unreviewedProviderStatus.getByText('Record alignment not reviewed')
+    ).toBeVisible();
+    await expect(unreviewedProviderStatus).toContainText(
+      'This record matches the provider datapack, but it was not one of the reviewed comparison examples.'
+    );
+    await expect(unreviewedProviderStatus).not.toContainText(
+      'Average house price extends to May 2026'
+    );
+    await expect(unreviewedProviderStatus.locator('[data-provider-snapshot-coverage]')).toHaveCount(
+      0
+    );
+    await expect(
+      unreviewedProviderStatus.getByRole('link', {
+        name: 'Open live indicator on ONS Explore Local Statistics (external)'
+      })
+    ).toHaveAttribute(
+      'href',
+      'https://www.ons.gov.uk/explore-local-statistics/indicators/record-3'
+    );
+
+    await page.goto(
+      `?bundle=${encodeURIComponent(ONS_FACET_BUNDLE_URL)}#dataset/${ELS_RECORD_NAME}`
+    );
+    await page.getByPlaceholder('Search ONS products, concepts and geographies').waitFor();
+    await page.getByText('Preparing static search index...').waitFor({ state: 'hidden' });
+
+    await expect(rightPanel.getByRole('heading', { name: 'Average house price' })).toBeVisible();
+    const providerStatus = rightPanel.locator(
+      '[data-provider-datapack="ons-explore-local-statistics"][data-provider-scope="record"]'
+    );
+    await expect(providerStatus).toHaveAttribute('data-comparison-status', 'known-drift');
+    await expect(providerStatus.getByText('Known snapshot/live difference')).toBeVisible();
+    await expect(providerStatus).toContainText(
+      'The reviewed upstream reference is newer than the governed metadata snapshot.'
+    );
+    await expect(providerStatus.locator('[data-provider-snapshot-coverage]')).toContainText(
+      'April 2026'
+    );
+    await expect(providerStatus.locator('[data-provider-reviewed-coverage]')).toContainText(
+      'May 2026'
+    );
+    await expect(providerStatus).toContainText('External, not live-validated here.');
+
+    const liveAction = providerStatus.getByRole('link', {
+      name: 'Open live indicator on ONS Explore Local Statistics (external)'
+    });
+    await expect(liveAction).toHaveAttribute(
+      'href',
+      'https://www.ons.gov.uk/explore-local-statistics/indicators/average-house-price'
+    );
+    await expect(liveAction).toHaveAttribute('target', '_blank');
+    await expect(liveAction).toHaveAttribute('rel', 'noopener noreferrer');
+
+    await providerStatus.getByText('Snapshot and review evidence').click();
+    await expect(providerStatus).toContainText(
+      'Reviewed record examples only; not an exhaustive comparison of all 108 provider records.'
+    );
+    await expect(providerStatus).toContainText(
+      'Must be validated by the external provider at the time of use.'
+    );
+
+    // The provider datapack is loaded with the control plane; the full record
+    // and its resources remain lazy until explicitly requested.
+    expect(requests).not.toContain('/data/datasets.json');
+    await rightPanel.getByRole('button', { name: 'Load full record' }).click();
+    await expect.poll(() => requests.includes('/data/datasets.json')).toBe(true);
+    await expect.poll(() => requests.includes('/data/resources.json')).toBe(true);
+    const detailTabs = rightPanel.getByRole('tablist', { name: 'Data card sections' });
+    await detailTabs.getByRole('tab', { name: 'Evidence' }).click();
+    const resourceDisclosure = rightPanel
+      .locator('details')
+      .filter({ hasText: 'Source/access resources (1)' });
+    await resourceDisclosure.locator('summary').click();
+    await resourceDisclosure
+      .getByRole('button', { name: /Explore Local Statistics indicator page/ })
+      .click();
+
+    await expect(
+      rightPanel.getByRole('heading', { name: 'Explore Local Statistics indicator page' })
+    ).toBeVisible();
+    const resourceStatus = rightPanel.locator(
+      `[data-provider-datapack="ons-explore-local-statistics"][data-provider-scope="resource"]`
+    );
+    await expect(resourceStatus.locator('[data-provider-snapshot-coverage]')).toContainText(
+      'April 2026'
+    );
+    await expect(resourceStatus.getByRole('link', {
+      name: 'Open live indicator on ONS Explore Local Statistics (external)'
+    })).toHaveAttribute(
+      'href',
+      'https://www.ons.gov.uk/explore-local-statistics/indicators/average-house-price'
+    );
+    expect(ELS_RESOURCE_ID).toBe('els-average-house-price-source');
+  });
+
+  test('FACET-E2E-08 keeps every node label visible and cycles only conflicting edge labels', async ({ page }) => {
+    await openOnsFacetFixture(page);
+    await page.goto(`?bundle=${encodeURIComponent(ONS_FACET_BUNDLE_URL)}#dataset/${ELS_RECORD_NAME}`);
+    await waitForFixtureReady(page);
+    await page.getByLabel('Views').getByRole('button', { name: 'Graph', exact: true }).click();
+
+    const graph = page.getByRole('group', { name: 'Large corpus graph' });
+    await expect(graph).toBeVisible();
+    await expect(page.locator('.graph-summary')).toContainText('21 nodes · 20 relationships');
+
+    const edgeLabels = graph.locator('.edge-label');
+    expect(await edgeLabels.count()).toBeGreaterThan(0);
+    await expect(graph.locator('.graph-node-label > text')).toHaveCount(21);
+    const nodeLabelRoutes = () => graph.locator('.graph-node-label').evaluateAll((elements) =>
+      elements.map((element) => element.getAttribute('data-label-route'))
+    );
+    const firstNodeLabels = await nodeLabelRoutes();
+    await page.waitForTimeout(2100);
+    expect(await nodeLabelRoutes()).toEqual(firstNodeLabels);
+
+    const labels = graph.locator('.graph-node-label > text, .edge-label');
+    const paintedLabelHitBorders = await graph.locator('.label-hit').evaluateAll((elements) =>
+      elements.filter((element) => {
+        const style = getComputedStyle(element);
+        return Number.parseFloat(style.strokeWidth) > 0 && style.stroke !== 'none';
+      }).length
+    );
+    expect(paintedLabelHitBorders).toBe(0);
+
+    const overlappingPairs = await labels.evaluateAll((elements) => {
+      const boxes = elements.map((element) => element.getBoundingClientRect());
+      const overlaps: Array<Array<{ text: string; classes: string; x: string | null; y: string | null }>> = [];
+      for (let left = 0; left < boxes.length; left += 1) {
+        for (let right = left + 1; right < boxes.length; right += 1) {
+          const a = boxes[left];
+          const b = boxes[right];
+          if (a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top) {
+            overlaps.push([
+              {
+                text: elements[left]?.textContent?.trim() || '',
+                classes: elements[left]?.getAttribute('class') || '',
+                x: elements[left]?.getAttribute('x'),
+                y: elements[left]?.getAttribute('y')
+              },
+              {
+                text: elements[right]?.textContent?.trim() || '',
+                classes: elements[right]?.getAttribute('class') || '',
+                x: elements[right]?.getAttribute('x'),
+                y: elements[right]?.getAttribute('y')
+              }
+            ]);
+          }
+        }
+      }
+      return overlaps;
+    });
+    expect(overlappingPairs).toEqual([]);
+  });
+
+  test('FACET-E2E-09 filters the key and uses ordered relationship regions', async ({ page }) => {
+    await openOnsFacetFixture(page);
+    await page.goto(`?bundle=${encodeURIComponent(ONS_FACET_BUNDLE_URL)}#dataset/${ELS_RECORD_NAME}`);
+    await waitForFixtureReady(page);
+    await page.getByLabel('Views').getByRole('button', { name: 'Graph', exact: true }).click();
+
+    const graph = page.getByRole('group', { name: 'Large corpus graph' });
+    const summary = page.locator('.graph-summary');
+    const legend = page.getByLabel('Node type key');
+    await expect(graph).toBeVisible();
+    await expect(summary).toContainText('21 nodes · 20 relationships');
+    await expect(legend.getByRole('button')).toHaveCount(7);
+    for (const type of ['ONS metadata record', 'publisher', 'source/access resource', 'formats', 'topic', 'licence', 'tag']) {
+      await expect(legend).toContainText(type);
+    }
+    await expect(legend).not.toContainText('link stack');
+    await expect(legend).not.toContainText('record type stack');
+    await expect(legend).not.toContainText('opened stack group');
+    await expect(legend).not.toContainText('host/other');
+
+    const leftLabelPlacements = await graph.locator('.graph-node[data-relationship-side="left"]').evaluateAll((groups) =>
+      groups.flatMap((group) => {
+        const route = group.getAttribute('data-route');
+        const label = (group as SVGGElement).ownerSVGElement?.querySelector(`.graph-node-label[data-label-route="${CSS.escape(route || '')}"] > text`) as SVGGraphicsElement | null;
+        const symbol = group.querySelector(':scope > .node-symbol, :scope > .resource-card, :scope > .dataset-card, :scope > .stack-card') as SVGGraphicsElement | null;
+        if (!route || !label || !symbol) return [];
+        const labelBox = label.getBBox();
+        const symbolBox = symbol.getBBox();
+        return [{
+          route,
+          labelLeft: labelBox.x,
+          labelRight: labelBox.x + labelBox.width,
+          labelCenterY: labelBox.y + labelBox.height / 2,
+          nodeLeft: symbolBox.x,
+          nodeCenterY: symbolBox.y + symbolBox.height / 2
+        }];
+      })
+    );
+    expect(leftLabelPlacements).toHaveLength(8);
+    const preferredLeftPlacements = leftLabelPlacements.filter((placement) => (
+      placement.labelLeft < placement.nodeLeft
+      && placement.labelRight <= placement.nodeLeft + 1
+      && Math.abs(placement.labelCenterY - placement.nodeCenterY) <= 7
+    ));
+    expect(preferredLeftPlacements).toHaveLength(leftLabelPlacements.length);
+
+    const relationshipGeometry = await graph.evaluate((svg) => {
+      const measurements = (side: string) => [...svg.querySelectorAll(`.graph-node[data-relationship-side="${side}"]`)]
+        .flatMap((group) => {
+          const route = group.getAttribute('data-route');
+          const symbol = group.querySelector(':scope > .node-symbol, :scope > .resource-card, :scope > .dataset-card, :scope > .stack-card') as SVGGraphicsElement | null;
+          const label = svg.querySelector(`.graph-node-label[data-label-route="${CSS.escape(route || '')}"] > text`) as SVGGraphicsElement | null;
+          if (!route || !symbol || !label) return [];
+          const symbolBox = symbol.getBBox();
+          const labelBox = label.getBBox();
+          return [{
+            route,
+            symbolLeft: symbolBox.x,
+            symbolRight: symbolBox.x + symbolBox.width,
+            symbolX: symbolBox.x + symbolBox.width / 2,
+            symbolY: symbolBox.y + symbolBox.height / 2,
+            symbolTop: symbolBox.y,
+            symbolBottom: symbolBox.y + symbolBox.height,
+            labelLeft: labelBox.x,
+            labelRight: labelBox.x + labelBox.width,
+            labelCenterY: labelBox.y + labelBox.height / 2
+          }];
+        });
+      return {
+        viewBoxWidth: (svg as SVGSVGElement).viewBox.baseVal.width,
+        viewBoxHeight: (svg as SVGSVGElement).viewBox.baseVal.height,
+        left: measurements('left'),
+        top: measurements('top'),
+        right: measurements('right'),
+        documentAnchors: ['dataset', 'publisher', 'license'].map((type) => {
+          const group = svg.querySelector(`.graph-node[data-type="${type}"]`) as SVGGElement;
+          const symbol = group.querySelector(':scope > .node-symbol, :scope > .dataset-card') as SVGGraphicsElement;
+          const box = symbol.getBBox();
+          return { type, x: box.x + box.width / 2, y: box.y + box.height / 2 };
+        })
+      };
+    });
+    const leftRows = relationshipGeometry.left.map((item) => item.symbolY).sort((a, b) => a - b);
+    expect(Math.max(...leftRows.slice(1).map((value, index) => value - leftRows[index]))).toBeLessThanOrEqual(50);
+    expect(relationshipGeometry.top).toHaveLength(8);
+    expect(relationshipGeometry.top.filter((item) => !(
+      Math.abs(item.labelCenterY - item.symbolY) <= 7
+      && (item.labelRight <= item.symbolLeft + 1 || item.labelLeft >= item.symbolRight - 1)
+    ))).toEqual([]);
+    expect(Math.max(...relationshipGeometry.top.map((item) => item.symbolX))
+      - Math.min(...relationshipGeometry.top.map((item) => item.symbolX))).toBeGreaterThan(relationshipGeometry.viewBoxWidth * 0.42);
+    const centre = relationshipGeometry.documentAnchors.find((item) => item.type === 'dataset')!;
+    const publisher = relationshipGeometry.documentAnchors.find((item) => item.type === 'publisher')!;
+    const licence = relationshipGeometry.documentAnchors.find((item) => item.type === 'license')!;
+    expect(publisher.x).toBeLessThan(centre.x);
+    expect(licence.x).toBeGreaterThan(centre.x);
+    expect(publisher.y).toBeGreaterThan(centre.y);
+    expect(licence.y).toBeGreaterThan(centre.y);
+    expect(Math.abs(publisher.y - licence.y)).toBeLessThanOrEqual(1);
+    await expect(graph.locator('.graph-focus-title')).toContainText('Average house price');
+
+    // The fixture supplies no quantitative relationship strength. Uniform
+    // lines therefore remain neutral rather than implying unsupported weights.
+    await expect(summary).not.toContainText('line weight');
+    expect(await graph.locator('.graph-edge').evaluateAll((edges) =>
+      [...new Set(edges.map((edge) => edge.getAttribute('data-edge-width')))]
+    )).toHaveLength(1);
+  });
+
+  test('FACET-E2E-10A compacts graph controls and links node and relationship keys to the graph', async ({ page }) => {
+    await installClipboard(page);
+    await openOnsFacetFixture(page);
+    await page.goto(`?bundle=${encodeURIComponent(ONS_FACET_BUNDLE_URL)}#dataset/${ELS_RECORD_NAME}`);
+    await waitForFixtureReady(page);
+    await page.getByLabel('Views').getByRole('button', { name: 'Graph', exact: true }).click();
+
+    const graph = page.getByRole('group', { name: 'Large corpus graph' });
+    const labelsButton = page.getByRole('button', { name: /^Pause cycling graph labels/ });
+    await expect(labelsButton).toContainText(/^Labels \(\d+\/\d+\)$/);
+    await labelsButton.click();
+    const pausedLabelsButton = page.getByRole('button', { name: /^Resume cycling graph labels/ });
+    await expect(pausedLabelsButton).toContainText(/^Labels \(\d+\/\d+\)$/);
+    await expect(graph.locator('.graph-node-label').first()).toBeVisible();
+    const pausedSet = await pausedLabelsButton.textContent();
+    await page.waitForTimeout(2200);
+    await expect(pausedLabelsButton).toHaveText(pausedSet || '');
+    await expect.poll(() => new URL(page.url()).searchParams.get('graph.labels')).toBe('off');
+    await pausedLabelsButton.click();
+
+    const nodeKey = page.getByLabel('Node type key');
+    await expect(nodeKey.getByRole('button', { name: /focus$/ })).toHaveAttribute('aria-disabled', 'true');
+    const retainedTopicPosition = await graph.locator('.graph-node[data-type="topic"]').first().evaluate((node) => {
+      const symbol = node.querySelector('.node-symbol') as SVGGraphicsElement;
+      const box = symbol.getBBox();
+      return { x: box.x, y: box.y };
+    });
+    await nodeKey.getByRole('button', { name: /^tag 8$/ }).click();
+    await expect(page.locator('.graph-summary')).toContainText('13 nodes · 12 relationships');
+    await expect(nodeKey.getByRole('button', { name: /^tag 8$/ })).toHaveAttribute('aria-pressed', 'false');
+    await expect.poll(() => new URL(page.url()).searchParams.getAll('graph.hideType')).toEqual(['tag']);
+    expect(await graph.locator('.graph-node[data-type="topic"]').first().evaluate((node) => {
+      const symbol = node.querySelector('.node-symbol') as SVGGraphicsElement;
+      const box = symbol.getBBox();
+      return { x: box.x, y: box.y };
+    })).toEqual(retainedTopicPosition);
+    await nodeKey.getByRole('button', { name: /^tag 8$/ }).click();
+
+    const layoutButton = page.getByRole('button', { name: 'Layout', exact: true });
+    await layoutButton.click();
+    const layoutControls = page.getByRole('region', { name: 'Relationship layout' });
+    await expect(layoutControls).toBeVisible();
+    await layoutControls.getByRole('button', { name: 'By relationship', exact: true }).click();
+    await expect.poll(() => new URL(page.url()).searchParams.get('graph.layout')).toBe('relationships');
+    await layoutControls.getByRole('button', { name: 'Auto', exact: true }).click();
+    await expect.poll(() => new URL(page.url()).searchParams.get('graph.layout')).toBeNull();
+
+    await page.getByRole('button', { name: 'Relationships (20)', exact: true }).click();
+    const relationshipKey = page.getByLabel('Relationship type key');
+    const classifiedAs = relationshipKey.getByRole('button', { name: /^classified as from focus · 8$/ });
+    await classifiedAs.click();
+    await expect.poll(() => new URL(page.url()).searchParams.get('graph.relationship')).toBe('outgoing:classified as');
+    await expect(graph.locator('.graph-edge.highlight')).toHaveCount(8);
+    await expect(graph.locator('.graph-node.relationship-source')).toHaveCount(1);
+    await expect(graph.locator('.graph-node.relationship-target')).toHaveCount(8);
+    await expect(page.getByRole('tablist', { name: 'Relationship data card' }).getByRole('tab'))
+      .toHaveText(['Source', 'Relationship', 'Target']);
+    await page.getByRole('tab', { name: 'Source', exact: true }).click();
+    await expect(page.getByRole('tabpanel').last()).toContainText('Source of the selected relationship');
+
+    await classifiedAs.click();
+    await expect.poll(() => new URL(page.url()).searchParams.get('graph.relationship')).toBeNull();
+    await expect(graph.locator('.graph-edge.highlight')).toHaveCount(0);
+    await page.goBack();
+    await expect.poll(() => new URL(page.url()).searchParams.get('graph.relationship')).toBe('outgoing:classified as');
+    await expect(graph.locator('.graph-edge.highlight')).toHaveCount(8);
+    await expect(page.getByRole('tablist', { name: 'Relationship data card' })).toBeVisible();
+
+    await graph.locator('.edge-hit').first().click();
+    const selectedEdgeKey = await graph.locator('.edge-hit').first().getAttribute('data-edge');
+    await expect.poll(() => new URL(page.url()).searchParams.get('graph.edge')).toBe(selectedEdgeKey);
+    await expect(graph.locator('.graph-edge.selected')).toHaveCount(1);
+    await expect(graph.locator('.graph-node.relationship-source')).toHaveCount(1);
+    await expect(graph.locator('.graph-node.relationship-target')).toHaveCount(1);
+    await expect(page.getByRole('tablist', { name: 'Relationship data card' })).toBeVisible();
+    expect(await graph.locator('.edge-hit').first().evaluate((edge) => getComputedStyle(edge).outlineStyle)).toBe('none');
+
+    await page.locator('.stage-bar').getByRole('button', { name: 'Copy route', exact: true }).click();
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    expect(new URL(copied).searchParams.get('graph.edge')).toBe(selectedEdgeKey);
+    await page.goto(copied);
+    await waitForFixtureReady(page);
+    await expect(graph.locator('.graph-edge.selected')).toHaveCount(1);
+    await expect(page.getByRole('tablist', { name: 'Relationship data card' })).toBeVisible();
+
+    await page.locator('.right-panel').getByRole('button', { name: 'Clear relationship' }).click();
+    await expect.poll(() => new URL(page.url()).searchParams.get('graph.edge')).toBeNull();
+    await page.goBack();
+    await expect.poll(() => new URL(page.url()).searchParams.get('graph.edge')).toBe(selectedEdgeKey);
+    await expect(graph.locator('.graph-edge.selected')).toHaveCount(1);
+  });
+
+  test('FACET-E2E-11 keeps controls available, scrolls normally, and sizes both collapsed rails', async ({ page }) => {
+    await openOnsFacetFixture(page);
+    await page.goto(`?bundle=${encodeURIComponent(ONS_FACET_BUNDLE_URL)}#dataset/${ELS_RECORD_NAME}`);
+    await waitForFixtureReady(page);
+    await page.getByLabel('Views').getByRole('button', { name: 'Graph', exact: true }).click();
+
+    const stage = page.locator('.stage');
+    const toolbar = page.locator('.graph-toolbar');
+    const graph = page.getByRole('group', { name: 'Large corpus graph' });
+    await expect(graph).toBeVisible();
+    expect(await toolbar.evaluate((element) => getComputedStyle(element).position)).toBe('sticky');
+
+    const initialViewBox = await graph.getAttribute('viewBox');
+    const graphBox = await graph.boundingBox();
+    expect(graphBox).not.toBeNull();
+    await page.mouse.move(graphBox!.x + graphBox!.width / 2, graphBox!.y + Math.min(160, graphBox!.height / 2));
+    await page.mouse.wheel(0, 420);
+    await expect.poll(() => stage.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    expect(await graph.getAttribute('viewBox')).toBe(initialViewBox);
+
+    const stickyTop = (await toolbar.boundingBox())!.y;
+    await stage.evaluate((element) => { element.scrollTop += 260; });
+    await expect.poll(async () => Math.round((await toolbar.boundingBox())!.y)).toBe(Math.round(stickyTop));
+
+    await graph.dispatchEvent('wheel', { deltaY: -100, ctrlKey: true });
+    await expect(graph).not.toHaveAttribute('viewBox', initialViewBox || '');
+
+    await page.getByRole('button', { name: 'Toggle navigation' }).click();
+    await page.getByRole('button', { name: 'Toggle details' }).click();
+    const railWidths = await page.evaluate(() => ({
+      left: document.querySelector('.left-panel')!.getBoundingClientRect().width,
+      right: document.querySelector('.right-panel')!.getBoundingClientRect().width
+    }));
+    expect(railWidths.left).toBeCloseTo(44, 0);
+    expect(railWidths.right).toBeCloseTo(44, 0);
+  });
+
+  test('FACET-E2E-13 recentres inspected graph records and restores the prior graph with Back', async ({ page }) => {
+    await openOnsFacetFixture(page);
+    const originalCenterRoute = `dataset/${ELS_RECORD_NAME}`;
+    await page.goto(`?bundle=${encodeURIComponent(ONS_FACET_BUNDLE_URL)}#${originalCenterRoute}`);
+    await waitForFixtureReady(page);
+    await page.getByLabel('Views').getByRole('button', { name: 'Graph', exact: true }).click();
+
+    const graph = page.getByRole('group', { name: 'Large corpus graph' });
+    const publisherNode = graph.locator('.graph-node[data-type="publisher"]').first();
+    await expect(publisherNode).toBeVisible();
+    const inspectedRoute = await publisherNode.getAttribute('data-route');
+    expect(inspectedRoute).toBeTruthy();
+    await graph.locator(`.graph-node-label[data-label-route="${inspectedRoute}"]`).click();
+
+    await expect.poll(() => new URL(page.url()).searchParams.get('graph.center')).toBe(originalCenterRoute);
+    await expect.poll(() => decodeURIComponent(new URL(page.url()).hash.slice(1))).toBe(inspectedRoute);
+    await page.locator('.right-panel').getByRole('button', { name: 'Graph', exact: true }).click();
+
+    await expect.poll(() => new URL(page.url()).searchParams.get('graph.center')).toBeNull();
+    await expect.poll(() => decodeURIComponent(new URL(page.url()).hash.slice(1))).toBe(inspectedRoute);
+    const graphBox = await graph.boundingBox();
+    const focusBox = await graph
+      .locator(`.graph-node[data-route="${inspectedRoute}"] .node-symbol`)
+      .boundingBox();
+    expect(graphBox).not.toBeNull();
+    expect(focusBox).not.toBeNull();
+    expect(focusBox!.x + focusBox!.width / 2).toBeCloseTo(graphBox!.x + graphBox!.width / 2, 0);
+    expect(focusBox!.y + focusBox!.height / 2).toBeCloseTo(graphBox!.y + graphBox!.height * 0.53, -1);
+
+    await page.goBack();
+    await expect.poll(() => new URL(page.url()).searchParams.get('graph.center')).toBe(originalCenterRoute);
+    await expect.poll(() => decodeURIComponent(new URL(page.url()).hash.slice(1))).toBe(inspectedRoute);
+    await expect(page.locator('.right-panel').getByRole('button', { name: 'Graph', exact: true })).toBeVisible();
+  });
+
+  test('FACET-E2E-14 keeps the compact bundle loader beside the title and groups facet actions', async ({ page }) => {
+    await page.setViewportSize({ width: 907, height: 705 });
+    await openOnsFacetFixture(page);
+
+    const title = await page.locator('.title-block').boundingBox();
+    const loader = await page.locator('.bundle-form').boundingBox();
+    expect(title).not.toBeNull();
+    expect(loader).not.toBeNull();
+    expect(Math.abs((title!.y + title!.height / 2) - (loader!.y + loader!.height / 2))).toBeLessThan(12);
+    expect(loader!.width).toBeLessThanOrEqual(420);
+
+    await page.getByRole('navigation', { name: 'Workspace panels' }).getByRole('button', { name: /^Search & (facets|details)$/ }).click();
+    const actions = page.locator('.facet-toolbar-actions');
+    await expect(actions.getByRole('button')).toHaveText(['Guidance', 'Clear filters', 'Reset facet layout']);
+    const clear = await actions.getByRole('button', { name: 'Clear filters', exact: true }).boundingBox();
+    const reset = await actions.getByRole('button', { name: 'Reset facet layout', exact: true }).boundingBox();
+    expect(clear).not.toBeNull();
+    expect(reset).not.toBeNull();
+    expect(Math.abs(clear!.y - reset!.y)).toBeLessThan(4);
+    expect(reset!.x - (clear!.x + clear!.width)).toBeLessThanOrEqual(6);
+  });
+
+  test('FACET-E2E-15 keeps graph targets tight and subgroups a full-match stack', async ({ page }) => {
+    await openOnsFacetFixture(page);
+    await page.goto(`?bundle=${encodeURIComponent(ONS_FACET_BUNDLE_URL)}&filter.geography_level=region#facet/geography_level/region`);
+    await waitForFixtureReady(page);
+    await page.getByLabel('Views').getByRole('button', { name: 'Graph', exact: true }).click();
+
+    const graph = page.getByRole('group', { name: 'Large corpus graph' });
+    const stack = graph.locator('.graph-node[data-type="record-type-stack"]');
+    await expect(stack).toHaveCount(1);
+    const stackRoute = await stack.getAttribute('data-route');
+    expect(stackRoute).toBeTruthy();
+    await expect(stack).toHaveAttribute(
+      'aria-label',
+      `All loaded matches — 200 of ${ONS_REGION_COUNT} ONS metadata records`
+    );
+    await expect(graph.locator(`.graph-node-label[data-label-route="${stackRoute}"]`))
+      .toContainText(`All loaded matches — 200 of ${ONS_REGION_COUNT}`);
+
+    await page.goto(`?bundle=${encodeURIComponent(ONS_FACET_BUNDLE_URL)}#dataset/${ELS_RECORD_NAME}`);
+    await waitForFixtureReady(page);
+    await page.getByLabel('Views').getByRole('button', { name: 'Graph', exact: true }).click();
+    const tagNode = graph.locator('.graph-node[data-type="tag"]').first();
+    const tagRoute = await tagNode.getAttribute('data-route');
+    expect(tagRoute).toBeTruthy();
+    const hitBox = await tagNode.locator('.node-hit').boundingBox();
+    expect(hitBox).not.toBeNull();
+    expect(hitBox!.width).toBeLessThanOrEqual(56);
+    expect(hitBox!.height).toBeLessThanOrEqual(56);
+    await expect(graph.locator('.cluster-hit')).toHaveCount(0);
+    expect(await graph.locator(`.graph-node-label[data-label-route="${tagRoute}"]`).evaluate((label) => (
+      getComputedStyle(label).pointerEvents
+    ))).toBe('all');
+
+    await page.goto(`?bundle=${encodeURIComponent(ONS_FACET_BUNDLE_URL)}&filter.geography_level=region#facet/geography_level/region`);
+    await waitForFixtureReady(page);
+    // This part exercises grouping after explicitly loading full record metadata.
+    // Going back keeps the hydrated index, as the original in-app journey did.
+    await page.getByLabel('Views').getByRole('button', { name: 'Reader', exact: true }).click();
+    await page.locator('[data-okf-ranked-results="primary"] [data-okf-ranked-result]').first().getByRole('button').click();
+    await page.getByRole('button', { name: 'Load full record', exact: true }).click();
+    await expect(page.getByRole('tablist', { name: 'Data card sections' })).toBeVisible();
+    await page.goBack();
+    await page.getByLabel('Views').getByRole('button', { name: 'Graph', exact: true }).click();
+    const aggregate = graph.locator('.graph-node[data-type="record-type-stack"]');
+    const aggregateRoute = await aggregate.getAttribute('data-route');
+    expect(aggregateRoute).toBeTruthy();
+    await graph.locator(`.graph-node-label[data-label-route="${aggregateRoute}"]`).click();
+    await expect(graph.locator('.graph-node[data-type="dataset"]')).toHaveCount(0);
+    await expect(graph.locator('.graph-node[data-type="facet-stack"]')).toHaveCount(8);
+    await expect(page.locator('.graph-caption')).toContainText('Grouped by derivation mode');
+    const hierarchy = page.getByRole('navigation', { name: 'Open graph hierarchy' });
+    await expect(hierarchy).toBeVisible();
+    await expect(hierarchy).toContainText(`All matching ONS metadata records (${ONS_REGION_COUNT})`);
+    await expect(hierarchy.locator('[data-hierarchy-dimension="derivation_mode"]')).toContainText('Shown in the graph below');
+    await expect(hierarchy.locator('[aria-current="step"]')).toHaveCount(0);
+    await expect.poll(() => page.evaluate(() => new URL(location.href).searchParams.getAll('graph.stack')))
+      .toEqual([aggregateRoute]);
+
+    const subgroup = graph.locator('.graph-node[data-type="facet-stack"]').first();
+    const subgroupRoute = await subgroup.getAttribute('data-route');
+    const siblingRoute = await graph.locator('.graph-node[data-type="facet-stack"]').nth(1).getAttribute('data-route');
+    expect(subgroupRoute).toBeTruthy();
+    expect(siblingRoute).toBeTruthy();
+    await subgroup.click();
+    await expect(page.locator('.graph-caption')).toContainText('Grouped by frequency');
+    await expect(graph.locator('.graph-node[data-type="dataset"]')).toHaveCount(0);
+    await expect(hierarchy.locator(`[data-stack-route="${subgroupRoute}"]`)).toHaveAttribute('aria-current', 'step');
+    await expect(hierarchy.locator(`[data-stack-route="${subgroupRoute}"]`)).toContainText('Open below');
+    await expect(hierarchy.locator('[data-hierarchy-dimension="frequency"]')).toContainText('Shown in the graph below');
+    await expect(graph.locator(`.graph-node[data-route="${siblingRoute}"]`)).toHaveCount(0);
+    await expect(hierarchy.locator(`[data-stack-route="${siblingRoute}"]`)).toBeVisible();
+    await expect(page.locator('.relationship-rows')).not.toContainText('facet-stack%2F');
+    await expect.poll(() => page.evaluate(() => new URL(location.href).searchParams.getAll('graph.stack')))
+      .toEqual([aggregateRoute, subgroupRoute]);
+
+    await page.goBack();
+    await expect(page.locator('.graph-caption')).toContainText('Grouped by derivation mode');
+    await expect(graph.locator('.graph-node[data-type="facet-stack"]')).toHaveCount(8);
+    await expect(hierarchy.locator('[data-hierarchy-dimension="derivation_mode"]')).toContainText('Shown in the graph below');
+    await expect(hierarchy.locator('[aria-current="step"]')).toHaveCount(0);
+    await expect.poll(() => page.evaluate(() => new URL(location.href).searchParams.getAll('graph.stack')))
+      .toEqual([aggregateRoute]);
+
+    await page.goBack();
+    await expect(graph.locator('.graph-node[data-type="record-type-stack"]')).toHaveCount(1);
+    await expect.poll(() => page.evaluate(() => new URL(location.href).searchParams.getAll('graph.stack')))
+      .toEqual([]);
+  });
+
+  test('FACET-E2E-16 pairs one dense relationship list across the focus', async ({ page }) => {
+    await openOnsFacetFixture(page);
+    await page.goto(`?bundle=${encodeURIComponent(ONS_FACET_BUNDLE_URL)}&filter.geography_level=local+authority#facet/geography_level/local%20authority`);
+    await waitForFixtureReady(page);
+    await page.getByLabel('Views').getByRole('button', { name: 'Graph', exact: true }).click();
+
+    const graph = page.getByRole('group', { name: 'Large corpus graph' });
+    await expect(graph.locator('.graph-node[data-type="dataset"]')).toHaveCount(12);
+    const geometry = await graph.evaluate((svg) => {
+      const rows = [...svg.querySelectorAll('.graph-node[data-type="dataset"]')].flatMap((group) => {
+        const route = group.getAttribute('data-route');
+        const side = group.getAttribute('data-relationship-side');
+        const symbol = group.querySelector(':scope > .dataset-card') as SVGGraphicsElement | null;
+        const label = svg.querySelector(`.graph-node-label[data-label-route="${CSS.escape(route || '')}"] > text`) as SVGGraphicsElement | null;
+        if (!route || !side || !symbol || !label) return [];
+        const symbolBox = symbol.getBBox();
+        const labelBox = label.getBBox();
+        return [{
+          side,
+          x: symbolBox.x + symbolBox.width / 2,
+          y: symbolBox.y + symbolBox.height / 2,
+          symbolLeft: symbolBox.x,
+          symbolRight: symbolBox.x + symbolBox.width,
+          labelLeft: labelBox.x,
+          labelRight: labelBox.x + labelBox.width
+        }];
+      });
+      return { width: (svg as SVGSVGElement).viewBox.baseVal.width, rows };
+    });
+    const left = geometry.rows.filter((row) => row.side === 'left').sort((a, b) => a.y - b.y);
+    const right = geometry.rows.filter((row) => row.side === 'right').sort((a, b) => a.y - b.y);
+    expect(left).toHaveLength(6);
+    expect(right).toHaveLength(6);
+    expect(
+      left.every((row) => row.x < geometry.width / 2 && row.labelRight <= row.symbolLeft + 1),
+      JSON.stringify(left)
+    ).toBe(true);
+    expect(
+      right.every((row) => row.x > geometry.width / 2 && row.labelLeft >= row.symbolRight - 1),
+      JSON.stringify(right)
+    ).toBe(true);
+    expect(left.map((row) => Math.round(row.y))).toEqual(right.map((row) => Math.round(row.y)));
+  });
+
+  test('FACET-E2E-17 keeps facets, graph context and nested hierarchy compact', async ({ page }) => {
+    await page.setViewportSize({ width: 907, height: 705 });
+    await openOnsFacetFixture(page);
+
+    await page.getByRole('navigation', { name: 'Workspace panels' }).getByRole('button', { name: /^Search & (facets|details)$/ }).click();
+    const firstFacetHeader = await page.locator('.facet-header').first().boundingBox();
+    expect(firstFacetHeader).not.toBeNull();
+    expect(firstFacetHeader!.height).toBeLessThanOrEqual(48);
+
+    await facetToggle(page, 'derivation_mode').click();
+    const firstFacetValue = await facetSection(page, 'derivation_mode')
+      .locator('.facet-values [data-facet-value]')
+      .first()
+      .boundingBox();
+    expect(firstFacetValue).not.toBeNull();
+    expect(firstFacetValue!.height).toBeGreaterThanOrEqual(40);
+
+    await page.goto(`?bundle=${encodeURIComponent(ONS_FACET_BUNDLE_URL)}&filter.geography_level=region#facet/geography_level/region`);
+    await waitForFixtureReady(page);
+    await page.getByLabel('Views').getByRole('button', { name: 'Graph', exact: true }).click();
+
+    const contextRail = page.locator('.graph-context-rail');
+    const nodeKey = page.getByLabel('Node type key');
+    const authority = page.getByLabel('Relationship authority filters');
+    await expect(contextRail).toBeVisible();
+    await expect(authority).toBeVisible();
+    const [railBox, keyBox, authorityBox] = await Promise.all([
+      contextRail.boundingBox(),
+      nodeKey.boundingBox(),
+      authority.boundingBox()
+    ]);
+    expect(railBox).not.toBeNull();
+    expect(keyBox).not.toBeNull();
+    expect(authorityBox).not.toBeNull();
+    expect(railBox!.height).toBeLessThanOrEqual(38);
+    expect(Math.abs(keyBox!.y - authorityBox!.y)).toBeLessThanOrEqual(2);
+
+    const graph = page.getByRole('group', { name: 'Large corpus graph' });
+    const aggregate = graph.locator('.graph-node[data-type="record-type-stack"]');
+    const aggregateRoute = await aggregate.getAttribute('data-route');
+    expect(aggregateRoute).toBeTruthy();
+    await graph.locator(`.graph-node-label[data-label-route="${aggregateRoute}"]`).click();
+
+    const subgroup = graph.locator('.graph-node[data-type="facet-stack"]').first();
+    await subgroup.click();
+    const hierarchy = page.getByRole('navigation', { name: 'Open graph hierarchy' });
+    await expect(hierarchy.locator('.graph-hierarchy-level')).toHaveCount(1);
+    const hierarchyBox = await hierarchy.boundingBox();
+    expect(hierarchyBox).not.toBeNull();
+    expect(hierarchyBox!.height).toBeLessThanOrEqual(78);
+  });
+});
+
+
+test('FACET-E2E-19 opens with all facets folded despite saved or provider pins', async ({ page }) => {
+  await openOnsFacetFixture(page);
+  await expect(page.locator('.facet-toggle[aria-expanded="true"]')).toHaveCount(0);
+  await facetToggle(page, 'geography_level').click();
+  const pin = facetSection(page, 'geography_level').getByRole('button', { name: 'Pin Geography level', exact: true });
+  if (await pin.count()) await pin.click();
+  await page.reload();
+  await waitForFixtureReady(page);
+  await expect(page.locator('.facet-toggle[aria-expanded="true"]')).toHaveCount(0);
+  await page.getByRole('tab', { name: 'Results', exact: true }).click();
+  await expect(page.locator('.sort-control select')).toHaveValue('title');
+});
+
+test('FACET-E2E-20 toggles bounded indexed colours without opening the facet or loading records', async ({ page }) => {
+  const requests: string[] = []; await openOnsFacetFixture(page, requests);
+  await facetSection(page, 'geography_level').locator('.facet-quick-values summary').click();
+  const region = facetSection(page, 'geography_level').locator('[data-facet-colour="region"]');
+  await region.click();
+  await expect(region).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByText('382 highlighted / 420 in scope', { exact: true })).toBeVisible();
+  await expect(facetToggle(page, 'geography_level')).toHaveAttribute('aria-expanded', 'false');
+  await region.click();
+  await expect(region).toHaveAttribute('aria-pressed', 'false');
+  expect(requests.filter(path => path.startsWith('/data/records-'))).toEqual([]);
+});

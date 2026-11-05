@@ -33,6 +33,7 @@ compatibility job:
 | `docs/` | Manuals, evaluation docs, conformance notes, the DCAT-AP/OpenAPI standards crosswalk and review history. |
 | `evaluation/okf-explorer/` | UK Government APIs question suite and visual-regression evidence. |
 | `evaluation/gov-ckan/` | GOV.UK CKAN paired exemplar question suite. |
+| `experiments/sharepoint-copilot/` | Deterministic Word-record generators, frozen evaluation controls and redacted aggregate findings for the Microsoft 365 Copilot grounding trial. Raw tenant identifiers, transcripts and attempt evidence stay in the ignored private results directory. |
 | `document/`, `stack/`, `standards/`, `federated/`, `frameworks/`, `research/`, `uk-government/`, `organisations/`, `glossary/` | The local Markdown OKF corpus used by the small bundle. |
 | `okf.config.json` | Small-bundle corpus configuration. |
 | `okf-registry.json` and `okf-registry.jsonld` | Generated registry projections for the Explorer and Linked Data clients. |
@@ -64,6 +65,16 @@ sources and fixtures. The generated JSON and selected Markdown files under
 `uk-government-apis/` are committed so the exemplar can be browsed and tested
 without a live server.
 
+For human documentation, `build_site.py` discovers every local Markdown
+dependency reachable from `docs/` and `profiles/`, publishes a corresponding
+HTML page, rewrites links in paragraphs, lists and tables, and gives headings
+stable fragment identifiers. The build then crawls the generated reading
+pages. A same-site `.md` link, missing target or missing fragment fails before
+Pages upload. Missing scripts, stylesheets and images, duplicate identifiers,
+and route collisions also fail closed. Canonical Markdown remains in Git,
+is advertised as an exact-build alternate for machines, and is available to
+people through GitHub's rendered HTML source view.
+
 The UK Legislation source boundary is the generator plus official Atom/CLML
 interfaces and cached source responses. Generated compressed work/search
 chunks are committed; provision trees are resolved from official CLML only
@@ -72,10 +83,10 @@ when selected. Documentation state and screenshot routes are maintained under
 
 ## Stable Public Entry Points
 
-- Root Explorer redirect:
+- Learning hub and preserved Explorer routes:
   `https://chris-page-gov.github.io/okf-explorer/`
 - Svelte Explorer:
-  `https://chris-page-gov.github.io/okf-explorer/`
+  `https://chris-page-gov.github.io/okf-explorer/explore/`
 - Legacy compatibility Explorer:
   `https://chris-page-gov.github.io/okf-explorer/legacy/`
 - UK Government APIs descriptor:
@@ -93,18 +104,21 @@ machine-readable `okf-moved.v1` contract consumed by Explorer v0.4.0 and later.
 
 ## Local Validation
 
+First run `uv sync --locked`. This uses the committed CPython 3.12.11 and
+dependency lock rather than the host's default Python installation.
+
 Run these before publication work:
 
 ```sh
-python3 scripts/build_uk_government_api_okf.py --check
-python3 scripts/check_legislation_okf.py
-python3 scripts/build_okf_registry.py --check
-python3 scripts/check_source_constraints.py
-python3 scripts/check_documentation_lockstep.py
-python3 scripts/build_okf_bundle.py --check
-python3 scripts/update_viewer.py --check
-python3 scripts/check_okf.py
-python3 scripts/build_site.py
+uv run --locked python scripts/build_uk_government_api_okf.py --check
+uv run --locked python scripts/check_legislation_okf.py
+uv run --locked python scripts/build_okf_registry.py --check
+uv run --locked python scripts/check_source_constraints.py
+uv run --locked python scripts/check_documentation_lockstep.py
+uv run --locked python scripts/build_okf_bundle.py --check
+uv run --locked python scripts/update_viewer.py --check
+uv run --locked python scripts/check_okf.py
+uv run --locked python scripts/build_site.py
 ```
 
 Large-corpus generators must publish both chunked whole-corpus relationships
@@ -120,10 +134,15 @@ pnpm check
 pnpm test
 pnpm build
 cd ../..
-python3 scripts/build_site.py
+uv run --locked python scripts/build_site.py
 ```
 
 ## How To Decide What To Read
+
+If the terminology or architecture is new to you, start with
+[OKF Explorer from the beginning](beginners/index.md). Its coverage map
+provides a staged route from browser and data basics to every advanced
+specification used by the implementation.
 
 If you are browsing an existing pack, start with
 [okf-explorer-persona-manual.md](okf-explorer-persona-manual.md).
@@ -133,7 +152,9 @@ If you are researching legislation, start with the
 [illustrated manual](uk-legislation/illustrated-manual.md).
 
 If you are asking an AI to answer questions from a pack, start with
-[ai-okf-usage.md](ai-okf-usage.md).
+[ai-okf-usage.md](ai-okf-usage.md). For evidence about retrieval from governed
+Word records in SharePoint, continue to the
+[Microsoft 365 Copilot trial report](sharepoint-m365-copilot-trial.md).
 
 If you are building a new pack, start with
 [okf-bundle-authoring.md](okf-bundle-authoring.md) and keep

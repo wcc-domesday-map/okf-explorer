@@ -1,116 +1,77 @@
-# OKF Explorer Documentation
+# OKF Explorer documentation
 
-This folder is the operating manual for the OKF Explorer, the UK Government
-APIs exemplar, and related large-corpus OKF packs.
+Start with a question, inspect the evidence, then make a small bundle of your
+own. These guides serve consumers, domain experts, students and knowledge
+workers as well as contributors.
 
-## Start Here
+New to the project? [Read the beginner guide in HTML](https://chris-page-gov.github.io/okf-explorer/docs/beginners/index.html),
+with chapter contents on the left on wider screens. The
+[website home page](https://chris-page-gov.github.io/okf-explorer/) links directly
+to this guide, worked examples and the GitHub repository.
 
-- [Warwickshire same-origin profile](warwickshire-same-origin-profile.md)
-  defines this fork's parent-owned route layout, network boundary, provenance
-  presentation, validation and organisation-promotion process.
-- [Repository guide](repository-guide.md) explains where the important files
-  live and how the publication pipeline fits together.
-- [Use the OKF Explorer](use-okf-explorer.md) remains the short path from a
-  bundle URL to the hosted Explorer.
-- [UK Legislation documentation spine](uk-legislation/index.md) routes legal researchers, counsel, data engineers, curators and AI evaluators to task-specific guidance.
-- [Illustrated UK Legislation manual](uk-legislation/illustrated-manual.md) follows legislation-specific personas and user journeys from overview to selected-passage provenance.
-- [Illustrated Explorer manual](okf-explorer-persona-manual.md) describes the
-  UI through user stories and screenshots.
-- [Geospatial Map personas and user stories](geospatial-map-personas-and-user-stories.md)
-  explains who needs spatial discovery, what can go wrong and how each need is
-  covered by browser tests.
-- [Illustrated Geospatial Map manual](geospatial-map-manual.md) walks through
-  evidence, place reductions, locator precision, record selection, bounded
-  previews and progressive recovery.
-- [Static search and filtering manual](static-search-filtering-manual.md)
-  illustrates deterministic search, multi-value filters, sorting, match
-  explanations and durable retrieval URLs against the GOV.UK CKAN corpus.
-- [GOV.UK CKAN personas and user journeys](gov-ckan-personas-and-user-journeys.md)
-  links CKAN-specific user needs to all 100 questions and the executable
-  interaction journeys.
-- [Use an AI with an OKF pack](ai-okf-usage.md) gives prompts and data-access
-  rules for asking questions over a pack without losing provenance.
-- [Create OKF bundles](okf-bundle-authoring.md) explains how to build bundles
-  that take full advantage of Explorer facets, search, graph, timeline,
-  resources and right-card metadata.
-- [Federated bundle wiki architecture](okf-bundle-wiki-architecture-2026-07-11.md)
-  defines independently published bundle wikis, YAML-LD/JSON-LD semantics,
-  registry discovery, compatibility projections and the extraction plan.
-- [Source constraint ledger](source-constraint-ledger.md) records fair-use,
-  access-control, licensing and context-loading concerns for internal
-  escalation without silently reducing prototype functionality.
-- [OKF standards crosswalk](okf-standards-crosswalk.md) maps every OKF record
-  field to its DCAT-AP and OpenAPI equivalent, so bundles stay federatable
-  with external API/data catalogues.
-- [20 minute demo script](demo-script-2026-07-09.md) is the prepared run of
-  show-and-tell for the 2026-07-09 demonstration.
+## Start here
 
-## Quality And Review
+- [Start with knowledge you can inspect](onboarding/index.md): choose a useful first task.
+- [Try a bundle with AI](onboarding/try-a-bundle.md): a worked evidence question with a human fallback.
+- [Choose an example](onboarding/examples.md): one catalogue, grouped by purpose.
+- [Choose an AI access route](ai-okf-usage.md): files, public links, local agents, Copilot and experimental page tools.
+- [Choose your journey](onboarding/audience-journeys.md): different tasks and successful stopping points.
+- [Make your first bundle](onboarding/first-bundle.md): a complete fictional starter, exact commands and expected checks.
 
-- [OKF Explorer evaluation harness](okf-explorer-evaluation.md) defines the
-  100-question scoring suite, accessibility checks, GOV.UK-aligned publication
-  rubric and visual-regression evidence.
-- [UK Legislation architecture](uk-legislation-okf.md) documents the complete work catalogue, legal ontology, progressive provision resolver, official access methods and barrister-oriented AI evaluation contract.
-- [OKF pack parity](okf-pack-parity.md) keeps the UK Government APIs and GOV.UK
-  CKAN packs aligned as paired exemplars.
-- [OKF conformance](okf-conformance.md) records the v0.1 conformance boundary
-  and intentional deviations.
-- [Explorer overview context](explorer-overview-context.md) specifies the
-  generated overview/analysis contract consumed by the Explorer.
-- [Geospatial Map exploration](geospatial-map-exploration.md) specifies the
-  deterministic Map canvas, spatial evidence levels, reduction state and
-  progressive external-preview path being developed on the `geospatial`
-  branch.
+## Use and learn
 
-## Dated Review Records
+- [Use Explorer](use-okf-explorer.md): current search, facets, highlighting, keeping sets, panels and evidence.
+- [Inspect a retained evidence example](retained-evidence-demo.md): a seven-step demonstration of a fixed package, its source links and its limits.
+- [AI Infrastructure walkthrough](ai-infrastructure-knowledge-graph-walkthrough.md): one concept across Markdown and Explorer.
+- [Beginner reference](beginners/index.md): explanations when you need them, without required sequential reading.
+- [Reading help for source passages](reading-help.md): check exact source wording and open help at declared occurrences.
+- [Optional project studio](project-studio/index.md): research and create a larger bundle; app creation is optional.
+- [Map manual](geospatial-map-manual.md) and [legislation guide](uk-legislation/index.md): specialist journeys and their limits.
 
-- [Code review, 2026-07-07](code-review-2026-07-07.md) is the original review
-  report. It is preserved as historical evidence and is superseded for current
-  pack status.
-- [Code review follow-up, 2026-07-08](code-review-2026-07-08.md) records the
-  remediation, publication checks and current pack checkpoint.
+## Author and maintain
 
-## Research Basis
+- [Architecture and implementation plan](architecture-and-implementation-plan.md): current capability states, delivery priorities, acceptance criteria and the whole-implementation review scope.
+- [Learning presentation](learning-presentation.md): design goal-led journeys and conceptual filters.
+- [Bundle authoring](okf-bundle-authoring.md): core fields, optional domain profiles and richer publication.
+- [Foundry prompt kit](okf-authoring-prompt-kit.md): governed production authoring after the small starter.
+- [Build and publication method](okf-build-and-publication-methodology.md): impact planning, source intake and release gates.
+- [Development guide](development.md) and [repository guide](repository-guide.md): maintain Explorer itself.
+- [Technical reference map](reference/index.md): contracts, domain specifications, evaluations and history.
 
-The documentation and evaluation rubric are deliberately aligned with current
-public service guidance rather than only internal engineering preferences:
+## Quality and review
 
-- GOV.UK Service Standard: understand users and their needs; solve a whole
-  problem; make the service simple to use; make sure everyone can use it; use
-  open standards and common platforms; protect privacy and security; define
-  success measures; and operate a reliable service.
-- GOV.UK accessibility guidance: services should meet WCAG 2.2 level AA,
-  account for common assistive technologies, and use both automated and manual
-  testing.
+The [P0 whole-implementation review](p0-implementation-review-2026-10-23.md)
+records the October baseline, validated findings, corrections and coverage limits.
 
-Useful references:
+Use [conformance](okf-conformance.md), the
+[evaluation harness](okf-explorer-evaluation.md) and the
+[technical reference map](reference/index.md#quality-and-review).
+A passing structure or integrity check is not proof of correctness, freshness
+or official endorsement.
 
-- [GOV.UK Service Standard](https://www.gov.uk/service-manual/service-standard)
-- [GOV.UK accessibility introduction](https://www.gov.uk/service-manual/helping-people-to-use-your-service/making-your-service-accessible-an-introduction)
-- [GOV.UK Design System accessibility strategy](https://design-system.service.gov.uk/community/accessibility-strategy/)
+## Dated review records
+
+[Historical reviews and postmortems](reference/index.md#dated-review-records)
+retain the evidence and decisions at their stated dates. Follow current task
+guides for today's interface.
+
+## Research basis
+
+[Corpus Map implications for OKF+ and Microsoft](corpus-map-okf-microsoft-review-2026-10-26.md)
+reviews entity navigation, the existing bundle design, Microsoft integration
+routes and a bounded evaluation before adoption.
+
+[Curated bounded evidence package research](bep-research.md) retains the
+research briefs, reports and reconstructed examples with their provenance and
+limits. The [BEP implementation status](bep-implementation-status.md) separates
+existing code from research proposals and remaining gaps.
+
+[Research and public-service references](reference/index.md#research-basis)
+explain the method. The [documentation style guide](documentation-style.md)
+sets British English and plain-language conventions.
 
 ## Public URLs
 
-Hosted Svelte Explorer with the UK Government APIs exemplar:
-
-```text
-https://chris-page-gov.github.io/okf-explorer/?bundle=https%3A%2F%2Fchris-page-gov.github.io%2Fai-infrastructure-wiki%2Fuk-government-apis%2Fokf-explorer.json&view=reader#overview
-```
-
-UK Government APIs descriptor:
-
-```text
-https://chris-page-gov.github.io/okf-uk-government-apis/okf-explorer.json
-```
-
-GOV.UK CKAN paired exemplar:
-
-```text
-https://chris-page-gov.github.io/okf-explorer/?bundle=https%3A%2F%2Fchris-page-gov.github.io%2Fai-engineering-lab-hackathon-london-2026%2Fgov-ckan%2Fokf-explorer.json&view=reader#overview
-```
-
-UK Legislation Explorer:
-
-```text
-https://chris-page-gov.github.io/okf-explorer/?bundle=https%3A%2F%2Fchris-page-gov.github.io%2Fai-infrastructure-wiki%2Flegislation%2Fokf-explorer.json&view=reader#overview
-```
+Use the [example catalogue](onboarding/examples.md) for named experiences,
+readiness, limits and the date of verified journeys. `govuk-webmcp` remains an
+external frozen competition candidate.

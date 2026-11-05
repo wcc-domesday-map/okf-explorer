@@ -5,6 +5,8 @@ import {
   POSTINGS_PARTITIONING_CONTRACT,
   validateLargeSearchManifest
 } from './largeSearchContract';
+import { QUERY_POLICY_SCHEMA, QUERY_POLICY_TOKENISER } from './queryPolicy';
+import { TYPO_TOLERANCE_CONTRACT } from './typoTolerance';
 
 function manifest(): LargeSearchManifest {
   return {
@@ -70,5 +72,74 @@ describe('large search manifest contract', () => {
     const malformed = manifest() as unknown as Record<string, unknown>;
     (malformed.entrypoints as Record<string, unknown>).postings = 'data/search/postings/ed.json';
     expect(() => validateLargeSearchManifest(malformed)).toThrow('postings entrypoints are malformed');
+  });
+
+  it('accepts only an exact, paired typo-tolerance contract on v2 manifests', () => {
+    const value = manifest();
+    value.schema = 'okf-static-search.v2';
+    value.typo_tolerance = { ...TYPO_TOLERANCE_CONTRACT };
+    value.entrypoints.typo_deletions = { co: 'data/search/typos/co.json' };
+    value.counts.typo_deletion_shards = 1;
+
+    expect(validateLargeSearchManifest(value).typo_tolerance).toEqual(TYPO_TOLERANCE_CONTRACT);
+
+    value.typo_tolerance.max_candidates_per_token = 4;
+    expect(() => validateLargeSearchManifest(value)).toThrow('unsupported or has drifted');
+  });
+
+  it('rejects unpaired, legacy, malformed, and miscounted typo indexes', () => {
+    const unpaired = manifest();
+    unpaired.schema = 'okf-static-search.v2';
+    unpaired.typo_tolerance = { ...TYPO_TOLERANCE_CONTRACT };
+    expect(() => validateLargeSearchManifest(unpaired)).toThrow('both its contract and deletion shards');
+
+    const legacy = manifest();
+    legacy.typo_tolerance = { ...TYPO_TOLERANCE_CONTRACT };
+    legacy.entrypoints.typo_deletions = { co: 'data/search/typos/co.json' };
+    expect(() => validateLargeSearchManifest(legacy)).toThrow('supported only');
+
+    const malformed = manifest();
+    malformed.schema = 'okf-static-search.v2';
+    malformed.typo_tolerance = { ...TYPO_TOLERANCE_CONTRACT };
+    malformed.entrypoints.typo_deletions = { co: '' };
+    expect(() => validateLargeSearchManifest(malformed)).toThrow('malformed');
+
+    const miscounted = manifest();
+    miscounted.schema = 'okf-static-search.v2';
+    miscounted.typo_tolerance = { ...TYPO_TOLERANCE_CONTRACT };
+    miscounted.entrypoints.typo_deletions = { co: 'data/search/typos/co.json' };
+    miscounted.counts.typo_deletion_shards = 2;
+    expect(() => validateLargeSearchManifest(miscounted)).toThrow('count differs');
+  });
+
+  it('accepts the exact bounded query policy only on a v2 manifest', () => {
+    const value = manifest();
+    value.schema = 'okf-static-search.v2';
+    value.query_policy = {
+      schema: QUERY_POLICY_SCHEMA,
+      tokeniser: QUERY_POLICY_TOKENISER,
+      stopwords: ['a', 'the'],
+      minimum_should_match: {
+        apply_from_query_tokens: 3,
+        minimum_matches: 2,
+        ratio_numerator: 3,
+        ratio_denominator: 10
+      }
+    };
+    expect(validateLargeSearchManifest(value).query_policy).toEqual(value.query_policy);
+
+    const legacy = structuredClone(value);
+    legacy.schema = 'okf-static-search.v1';
+    expect(() => validateLargeSearchManifest(legacy)).toThrow('supported only by okf-static-search.v2');
+
+    const floatingRatio = structuredClone(value);
+    floatingRatio.query_policy!.minimum_should_match.ratio_numerator = 0.3;
+    expect(() => validateLargeSearchManifest(floatingRatio)).toThrow('outside the supported range');
+
+    const undeclaredFallback = structuredClone(value) as LargeSearchManifest & {
+      query_policy: NonNullable<LargeSearchManifest['query_policy']> & { fallback?: string };
+    };
+    undeclaredFallback.query_policy.fallback = 'or';
+    expect(() => validateLargeSearchManifest(undeclaredFallback)).toThrow('unsupported or has drifted');
   });
 });

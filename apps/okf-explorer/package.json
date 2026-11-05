@@ -1,35 +1,62 @@
 {
   "name": "@okf/explorer",
   "private": true,
-  "version": "0.4.3-warwickshire.1",
+  "version": "0.8.1-warwickshire.1",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
+    "build:determinism": "node scripts/check_deterministic_build.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "test": "vitest run",
+    "test": "pnpm deps:check && node --test scripts/check_dependency_policy.test.mjs && vitest run && pnpm build:determinism && node --test scripts/learner_hub_contract.test.mjs scripts/compatibility_runtime.test.mjs && node --test scripts/app_build_manifest.test.mjs scripts/pages_fallback.test.mjs scripts/runtime_acceptance_contract.test.mjs scripts/external_bundle_acceptance_contract.test.mjs scripts/acceptance_invocation_lock.test.mjs scripts/run_impacted_browser_tests.test.mjs scripts/observe_protected_links.test.mjs scripts/verify_okf_deployment.test.mjs",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
-    "test:e2e:pages": "node -e \"if (!process.env.PLAYWRIGHT_BASE_URL) { console.error('Set PLAYWRIGHT_BASE_URL to the reviewed organisation-restricted deployment.'); process.exit(1) }\" && playwright test",
+    "test:e2e:foundry": "playwright test --config=playwright.foundry.config.ts",
+    "test:e2e:impacted": "node scripts/run_impacted_browser_tests.mjs",
+    "test:e2e:terminal": "node scripts/run_impacted_browser_tests.mjs --full --engines-json '[\"chrome\",\"firefox\",\"webkit\"]'",
+    "test:e2e:pages": "node scripts/check_warwickshire_assembly.mjs",
+    "test:e2e:warwickshire": "playwright test tests/ui/warwickshire-security.spec.ts --project=chrome",
+    "test:e2e:warwickshire:terminal": "playwright test tests/ui/warwickshire-security.spec.ts --project=chrome --project=firefox --project=webkit",
     "test:e2e:headed": "playwright test --headed",
-    "benchmark:search": "node ../../scripts/benchmark_static_search.mjs"
+    "test:build-manifest": "node --test scripts/app_build_manifest.test.mjs",
+    "test:acceptance-contract": "node --test scripts/runtime_acceptance_contract.test.mjs",
+    "test:external-acceptance-contract": "node --test scripts/external_bundle_acceptance_contract.test.mjs",
+    "acceptance:bundle": "node scripts/run_acceptance_invocation.mjs bundle",
+    "acceptance:legislation": "node scripts/run_acceptance_invocation.mjs legislation",
+    "benchmark:search": "node ../../scripts/benchmark_static_search.mjs",
+    "sbom": "node scripts/build_sbom.mjs",
+    "sbom:check": "node scripts/build_sbom.mjs --check",
+    "deps:check": "node scripts/check_dependency_policy.mjs"
   },
   "devDependencies": {
-    "@playwright/test": "^1.58.2",
-    "@sveltejs/adapter-static": "^3.0.8",
-    "@sveltejs/kit": "^2.69.3",
-    "@sveltejs/vite-plugin-svelte": "^7.2.0",
-    "@vitest/coverage-v8": "^4.1.10",
-    "svelte": "^5.56.5",
-    "svelte-check": "^4.7.3",
+    "@axe-core/playwright": "4.14.0",
+    "@playwright/test": "1.64.1",
+    "@sveltejs/adapter-static": "4.0.0",
+    "@sveltejs/kit": "^3.1.0",
+    "@sveltejs/vite-plugin-svelte": "7.3.1",
+    "@types/node": "^24.19.2",
+    "@vitest/coverage-v8": "4.1.12",
+    "svelte": "5.57.2",
+    "svelte-check": "^4.7.7",
     "typescript": "^6.0.3",
-    "vite": "^8.1.4",
-    "vitest": "^4.1.10"
+    "vite": "8.3.5",
+    "vitest": "4.1.12"
   },
   "pnpm": {
     "overrides": {
-      "cookie": "^0.7.2"
+      "cookie@<0.7.2": "0.7.2",
+      "nanoid@<3.3.18": "3.3.18",
+      "rolldown": "1.2.9",
+      "devalue@<5.9.4": "5.9.4"
     }
+  },
+  "dependencies": {
+    "pdfjs-dist": "6.4.299",
+    "yaml": "^2.9.1"
+  },
+  "packageManager": "pnpm@10.34.7",
+  "engines": {
+    "node": ">=22.17"
   }
 }

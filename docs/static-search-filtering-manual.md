@@ -1,5 +1,10 @@
 # Static Search and Filtering Manual
 
+For current controls, use [Use Explorer](use-okf-explorer.md). The dated
+screenshots below are retained as historical illustrations; they may show
+older layout and selection behaviour.
+
+
 This illustrated manual covers the deterministic search and filtering
 interface introduced on `codex/static-search-filtering`. It uses the real
 GOV.UK CKAN descriptor: 58,461 datasets, 268,241 resources and 1,960,101
@@ -16,19 +21,27 @@ embedding service, Vespa deployment, remote retrieval service or agent API.
 
 ## 1. Recognise The New Controls
 
-The left panel now separates three tasks:
+The left panel now separates three tasks, with Search remaining persistent and
+the other controls grouped into task tabs:
 
 1. **Search** finds lexical matches in the static index.
-2. **Filter results** reduces the candidate set using structured metadata.
-3. **Sort** orders the resulting records.
+2. **Facets** and **Browse** reduce the candidate set using structured metadata
+   or provider-defined hierarchies.
+3. **Results** contains sort order and the resulting record list.
 
-![The branch Explorer showing separate Search, Filter results and Sort controls for the GOV.UK CKAN corpus](assets/okf-search-filtering-manual/01-search-filter-sort-controls.png)
+The capture below records the preceding flat-panel implementation used for the
+verified CKAN journey. Search and facet semantics are unchanged, but Sort and
+the record list have since moved into **Results** and hierarchy rows into
+**Browse**.
+
+![Earlier flat-panel Search, Filter results and Sort controls used for the verified GOV.UK CKAN journey](assets/okf-search-filtering-manual/01-search-filter-sort-controls.png)
 
 In this unfiltered state:
 
 - the metrics show the complete large-corpus overview;
-- facets remain folded until opened;
-- the default sort is **Newest** because there is no text query;
+- facets remain folded until opened, with compact distributions or search
+  previews in their closed state;
+- the default sort is **Title** because there is no text query;
 - the application has loaded only overview context, not every record; and
 - the selected route remains in the URL hash.
 
@@ -86,10 +99,47 @@ its delta-encoded postings, so this recognition does not require full-corpus
 hydration. Explicit aliases supplied by a bundle take precedence over inferred
 initialisms.
 
+### How a v2 producer can govern multi-word queries
+
+A producer may opt an `okf-static-search.v2` manifest into the exact
+`okf-search-query-policy.v1` contract. The declaration supplies:
+
+- the fixed `nfkd-lowercase-ascii-alphanumeric-component-v1` tokeniser;
+- a sorted, unique and bounded list of producer stopwords; and
+- integer minimum-should-match parameters: an application threshold, a fixed
+  minimum and a ratio numerator and denominator.
+
+Explorer normalises each query with NFKD, removes combining marks, lowercases
+it, splits it into ASCII letter-or-number components, applies the manifest's
+existing minimum token length, removes the declared stopwords and keeps the
+first occurrence of each remaining token. If there are fewer tokens than the
+application threshold, one resolved group is required. At or above the
+threshold, the required group count is the larger of the fixed minimum and
+the rounded-up integer ratio, capped at the query-token count. Unresolved
+tokens remain in that denominator; they do not silently make the query easier.
+
+The worker response includes bounded `query_policy` counts and ordered
+`unresolved_tokens`, so producer and evaluation tooling can inspect how many
+distinct groups were supplied, resolved and required. These internal counts
+are not currently rendered as an Explorer interface explanation. Recognised
+entities and bounded typo correction still use the same group accounting. An
+exact one-component entity alias is a resolved semantic group only when its
+governed ordinal postings are available; otherwise Explorer uses ordinary
+lexical resolution and reports the actual outcome.
+
+This behaviour is opt-in. A v2 manifest without `query_policy` and every
+existing v1 manifest retain their previous strict-AND/tokeniser behaviour.
+Small bundles retain their existing in-memory, lower-case substring search.
+The exact producer schema, bounds and formula are recorded in the [static
+search and filtering design](search-filtering-design.md#producer-declared-query-policy-v062).
+
 ## 3. Add And Remove Filters
 
-Open a facet and select a value. A normal click replaces the current value in
-that facet. Ctrl-click, Cmd-click or Shift-click adds another value.
+Open a facet and select a value to highlight its set. A normal click on an
+unselected value replaces the selection in that facet; clicking a selected value
+removes it. Ctrl-click or Cmd-click, or **Select multiple values**, enables
+multiple values. Use **Keep highlighted** to reduce scope. The dated screenshot
+below illustrates a reduced set, not the effect of a single highlight click.
 
 The semantics are fixed and shareable:
 
@@ -129,7 +179,7 @@ The Sort menu offers:
 Defaults are intentional:
 
 - a text query defaults to **Relevance**;
-- filter-only browsing defaults to **Newest**; and
+- filter-only browsing defaults to **Title**; and
 - choosing a different sort writes it to the public URL.
 
 The ranking benchmark evaluates current weighted scoring, field-weighted IDF,
@@ -170,7 +220,7 @@ Small OKF bundles use the same `q` and `sort` parameters plus repeated
 
 | Corpus | Search and filter behaviour |
 | --- | --- |
-| `okf-static-search.v2` | Lazily loads ordinal filter postings, applies filters before limiting results, calculates dynamic facet counts and returns structured match evidence. |
+| `okf-static-search.v2` | Lazily loads ordinal filter postings, applies filters before limiting results, calculates dynamic facet counts and returns structured match evidence. A producer may opt into the exact bounded `query_policy`; without it, strict-AND search remains unchanged. |
 | Existing v1 manifest | Continues lexical worker search, reuses legacy publisher postings for recognised organisations and uses the existing full-index filtering path when other filter postings are unavailable. URLs and visible semantics remain the same. |
 | Small bundle | Uses in-memory lexical matching, type filters and the shared URL/sort contract. |
 

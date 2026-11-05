@@ -1,0 +1,248 @@
+import { expect, test } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+import { canonicalJson } from '../../src/lib/context/index';
+
+const hash = async (value: string) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)))].map(byte => byte.toString(16).padStart(2, '0')).join('');
+const question = 'What evidence is needed?';
+const recordId = 'https://example.test/evidence/one';
+const documentUrl = 'https://assets.publishing.service.gov.uk/manual.pdf';
+const packageValue = {
+  schema: 'okf-governed-context.v1', context_id: 'urn:sha256:' + 'a'.repeat(64), engine: 'okf-context-assembly.v1', question,
+  bundle: { id: 'example', snapshot: 'fixed-snapshot', source_url: 'https://example.test/bundle.json' },
+  binding: { index_url: 'https://example.test/index.json', index_sha256: 'b'.repeat(64) }, scope: 'Training review', evidence_status: 'insufficient',
+  resolved_concepts: [{ id: 'concept:one', label: 'Capital', matched: ['capital'], method: 'declared-phrase', confidence: 'exact-alias' }],
+  ambiguities: [], unresolved_terms: [], selected: [{ record: {
+    id: recordId, route: 'page/manual/0012', label: '<img src=x onerror=alert(1)>', kind: 'evidence', text: 'Original extracted words about capital.',
+    assertion_status: 'normalized', authority: { class: 'project', label: 'Machine extraction', source: 'source' }, scope: 'Training review', rights: 'Open', access: 'public',
+    provenance: [{ url: documentUrl, locator: 'page 12', source_sha256: 'c'.repeat(64), captured_at: '2026-09-24', source_date: '2024-01-01' }],
+    evidence_unit: { schema: 'okf-evidence-unit.v1', kind: 'paragraph', boundary_status: 'machine-detected', completeness: 'unresolved', offset_unit: 'utf-8-bytes', joiner: '', spans: [{ source_url: documentUrl, source_sha256: 'c'.repeat(64), extraction_url: 'https://example.test/extraction.txt', extraction_sha256: 'd'.repeat(64), locator: 'page 12', source_text_sha256: 'e'.repeat(64), source_text_bytes: 40, source_start: 0, source_end: 40, unit_start: 0, unit_end: 40, literal_sha256: 'f'.repeat(64) }] }
+  }, reasons: ['Matched question words'], paths: [] }], relationships: [], requirements: [], missing_evidence: [{ code: 'missing_dependency', message: 'Qualification not found', ids: [] }], conflicts: [], limitations: ['Review still needed'],
+  budget: { max_nodes: 10, max_relationships: 10, max_depth: 2, max_bytes: 524288, used_nodes: 1, used_relationships: 0, used_bytes: 2000, reached_depth: 0, truncated: false, omissions: [] }, ai_answer: null
+};
+
+async function canonicalPackage(value: typeof packageValue): Promise<string> {
+  const copy = structuredClone(value);
+  copy.context_id = `urn:sha256:${await hash(canonicalJson({ ...copy, context_id: undefined, budget: { ...copy.budget, used_bytes: undefined } }))}`;
+  for (let i = 0; i < 6; i++) copy.budget.used_bytes = new TextEncoder().encode(canonicalJson(copy)).length;
+  return canonicalJson(copy);
+}
+
+test('loads one hash-bound case lazily, inspects source and exports a local review', async ({ page }) => {
+  const packageJson = await canonicalPackage(packageValue);
+  const manifest = { schema: 'okf-evidence-workbench.v1', title: 'Staff evidence review', publication: { label: 'Experimental', source_date: '2024-01-01', captured_at: '2026-09-24' }, questions: [
+    { id: 'q-01', label: 'Question 1', question, package: { url: 'packages/q-01.json', sha256: await hash(packageJson) } },
+    { id: 'q-02', label: 'Question 2', question: 'Another question?', package: { url: 'packages/q-02.json', sha256: '0'.repeat(64) } }
+  ] };
+  let packagesRequested = 0;
+  await page.route(requestUrl => new URL(requestUrl).pathname === '/evaluation/evidence-workbench/manifest.json', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(manifest) }));
+  await page.route(requestUrl => new URL(requestUrl).pathname.startsWith('/evaluation/evidence-workbench/packages/'), route => { packagesRequested += 1; return route.fulfill({ status: 200, contentType: 'application/json', body: packageJson }); });
+  await page.goto('/evidence/?manifest=/evaluation/evidence-workbench/manifest.json&case=q-01');
+  await expect(page.getByRole('heading', { name: question })).toBeVisible();
+  await expect(page.getByRole('link', { name: /open original document/i })).toHaveAttribute('href', `${documentUrl}#page=12`);
+  expect(packagesRequested).toBe(1);
+  await page.getByRole('link', { name: 'Extracted text and structure' }).click();
+  await expect(page.getByText('source text bytes 0–40')).toBeVisible();
+  await page.getByRole('link', { name: 'Complete passage' }).click();
+  const passageText = page.getByLabel('Complete logical passage text');
+  await expect(passageText).toContainText('Original extracted words about capital.');
+  await passageText.evaluate(element => { element.style.width = '120px'; element.style.maxHeight = '24px'; });
+  await passageText.focus();
+  await expect(passageText).toBeFocused();
+  const passageAxe = await new AxeBuilder({ page }).analyze();
+  expect(passageAxe.violations.filter(violation => violation.id === 'scrollable-region-focusable')).toEqual([]);
+  await page.getByRole('link', { name: 'Retrieval trace' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByText('Qualification not found')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Retrieval trace' })).toHaveAttribute('aria-current', 'page');
+  await page.getByRole('link', { name: 'Review proposal' }).click();
+  await page.goBack();
+  await expect(page.getByRole('link', { name: 'Retrieval trace' })).toHaveAttribute('aria-current', 'page');
+  await page.goForward();
+  await expect(page.getByRole('link', { name: 'Review proposal' })).toHaveAttribute('aria-current', 'page');
+  await page.getByLabel('Evidence and suggested change').fill('Check the page 12 qualification.');
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download review proposal' }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe('evidence-review-q-01.json');
+  await expect(page.getByText('Proposal downloaded locally.')).toBeVisible();
+  expect(await page.locator('img').count()).toBe(0);
+  expect(packagesRequested).toBe(1);
+  const accessibility = await new AxeBuilder({ page }).analyze();
+  expect(accessibility.violations).toEqual([]);
+});
+
+test('links only an exact selected record through a verified case sidecar', async ({ page }) => {
+  const packageJson = await canonicalPackage(packageValue);
+  const catalogueUrl = 'https://reading-help-corpus.fixture.test/reading-help-corpus/manifest.json';
+  const sidecar = JSON.stringify({ schema: 'okf-reading-help-workbench-targets.v1', case_id: 'q-01', targets: [{ record_id: recordId, family: 'dmg', document_id: 'dmg-ch60', unit_id: 'https://example.test/id/unit/60025' }] });
+  const manifest = {
+    schema: 'okf-evidence-workbench.v1', title: 'Exact reading-help link', publication: { label: 'Experimental' },
+    questions: [{ id: 'q-01', label: 'Question 1', question, package: { url: 'q-01.json', sha256: await hash(packageJson) } }],
+    reading_help: { catalogue: { url: catalogueUrl, sha256: 'a'.repeat(64), bytes: 1234 }, targets_by_case: [{ case_id: 'q-01', url: 'reading-help/q-01.json', sha256: await hash(sidecar), bytes: new TextEncoder().encode(sidecar).byteLength }] }
+  };
+  let corpusRequests = 0;
+  await page.route(url => url.href.startsWith('https://reading-help-corpus.fixture.test/'), route => { corpusRequests++; return route.abort(); });
+  await page.route(url => new URL(url).pathname === '/evaluation/evidence-workbench/manifest.json', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(manifest) }));
+  await page.route(url => new URL(url).pathname === '/evaluation/evidence-workbench/q-01.json', route => route.fulfill({ status: 200, contentType: 'application/json', body: packageJson }));
+  await page.route(url => new URL(url).pathname === '/evaluation/evidence-workbench/reading-help/q-01.json', route => route.fulfill({ status: 200, contentType: 'application/json', body: sidecar }));
+  await page.goto('/evidence/?manifest=/evaluation/evidence-workbench/manifest.json&case=q-01');
+  const link = page.getByRole('link', { name: 'Read this passage in the source-linked reading help →' });
+  await expect(link).toBeVisible();
+  const target = new URL((await link.getAttribute('href'))!, page.url());
+  expect(target.pathname).toBe('/reading-help/corpus/');
+  expect(target.searchParams.get('catalogue')).toBe(catalogueUrl);
+  expect(target.searchParams.get('catalogue_sha256')).toBe('a'.repeat(64));
+  expect(target.searchParams.get('catalogue_bytes')).toBe('1234');
+  expect(target.searchParams.get('unit')).toBe('https://example.test/id/unit/60025');
+  expect(corpusRequests).toBe(0);
+});
+
+test('reports a package hash mismatch without displaying content', async ({ page }) => {
+  const manifest = { schema: 'okf-evidence-workbench.v1', title: 'Staff evidence review', publication: { label: 'Experimental' }, questions: [{ id: 'q-01', label: 'Question 1', question, package: { url: 'q.json', sha256: '0'.repeat(64) } }] };
+  await page.route(requestUrl => new URL(requestUrl).pathname === '/evaluation/evidence-workbench/manifest.json', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(manifest) }));
+  await page.route(requestUrl => new URL(requestUrl).pathname === '/evaluation/evidence-workbench/q.json', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(packageValue) }));
+  await page.goto('/evidence/?manifest=/evaluation/evidence-workbench/manifest.json');
+  await expect(page.getByRole('alert')).toContainText('SHA-256 does not match');
+  await expect(page.getByRole('heading', { name: question })).toHaveCount(0);
+});
+
+test('bare workbench route gives load guidance without requesting an absent manifest', async ({ page }) => {
+  let requested = false;
+  await page.route(url => new URL(url).pathname.endsWith('/evaluation/evidence-workbench/manifest.json'), route => { requested = true; return route.abort(); });
+  await page.goto('/evidence/');
+  await expect(page.getByRole('heading', { name: 'Open an evidence review' })).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  expect(requested).toBe(false);
+});
+
+test('rapid case switch keeps the latest package and its status', async ({ page }) => {
+  const first = await canonicalPackage(packageValue);
+  const secondQuestion = 'Which evidence is needed next?';
+  const second = await canonicalPackage({ ...packageValue, question: secondQuestion });
+  const manifest = { schema: 'okf-evidence-workbench.v1', title: 'Rapid review', publication: { label: 'Experimental' }, questions: [
+    { id: 'q-01', label: 'Question 1', question, package: { url: 'q-01.json', sha256: await hash(first) } },
+    { id: 'q-02', label: 'Question 2', question: secondQuestion, package: { url: 'q-02.json', sha256: await hash(second) } }
+  ] };
+  let firstStarted = false;
+  await page.route(url => new URL(url).pathname === '/evaluation/evidence-workbench/manifest.json', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(manifest) }));
+  await page.route(url => new URL(url).pathname === '/evaluation/evidence-workbench/q-01.json', async route => {
+    firstStarted = true;
+    await new Promise(resolve => setTimeout(resolve, 400));
+    await route.fulfill({ status: 200, contentType: 'application/json', body: first }).catch(() => {});
+  });
+  await page.route(url => new URL(url).pathname === '/evaluation/evidence-workbench/q-02.json', route => route.fulfill({ status: 200, contentType: 'application/json', body: second }));
+  await page.goto('/evidence/?manifest=/evaluation/evidence-workbench/manifest.json');
+  await expect.poll(() => firstStarted).toBe(true);
+  await page.getByRole('link', { name: /Question 2/ }).click();
+  await expect(page.getByRole('heading', { name: secondQuestion })).toBeVisible();
+  await page.waitForTimeout(500);
+  await expect(page.getByRole('heading', { name: secondQuestion })).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(page.locator('.busy')).toHaveCount(0);
+});
+
+test('same-case Back and Forward cancel an older package load without adding history', async ({ page }) => {
+  const content = await canonicalPackage(packageValue);
+  const manifest = { schema: 'okf-evidence-workbench.v1', title: 'History review', publication: { label: 'Experimental' }, questions: [
+    { id: 'q-01', label: 'Question 1', question, package: { url: 'q.json', sha256: await hash(content) } }
+  ] };
+  let requests = 0;
+  await page.route(url => new URL(url).pathname === '/evaluation/evidence-workbench/manifest.json', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(manifest) }));
+  await page.route(url => new URL(url).pathname === '/evaluation/evidence-workbench/q.json', async route => {
+    requests++;
+    if (requests === 2) await new Promise(resolve => setTimeout(resolve, 450));
+    await route.fulfill({ status: 200, contentType: 'application/json', body: content }).catch(() => {});
+  });
+  await page.goto('/evidence/?manifest=/evaluation/evidence-workbench/manifest.json&case=q-01');
+  await expect(page.getByRole('heading', { name: question })).toBeVisible();
+  await page.getByRole('link', { name: 'Retrieval trace' }).click();
+  await expect(page.getByRole('link', { name: 'Retrieval trace' })).toHaveAttribute('aria-current', 'page');
+  await page.getByRole('link', { name: /Question 1/ }).click();
+  await expect.poll(() => requests).toBe(2);
+  await page.goBack();
+  await expect(page.getByRole('link', { name: 'Original source' })).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('heading', { name: question })).toBeVisible();
+  await page.waitForTimeout(500);
+  await expect(page.getByRole('link', { name: 'Original source' })).toHaveAttribute('aria-current', 'page');
+  await page.goForward();
+  await expect(page.getByRole('link', { name: 'Retrieval trace' })).toHaveAttribute('aria-current', 'page');
+  await expect(page).toHaveURL(/tab=trace/);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(page.locator('.busy')).toHaveCount(0);
+});
+
+test('browser history reloads a different manifest', async ({ page }) => {
+  const content = await canonicalPackage(packageValue);
+  const reference = { id: 'q-01', label: 'Question 1', question, package: { url: 'q.json', sha256: await hash(content) } };
+  await page.route(url => new URL(url).pathname === '/review-a/manifest.json', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ schema: 'okf-evidence-workbench.v1', title: 'Manifest A', publication: { label: 'A' }, questions: [reference] }) }));
+  await page.route(url => new URL(url).pathname === '/review-b/manifest.json', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ schema: 'okf-evidence-workbench.v1', title: 'Manifest B', publication: { label: 'B' }, questions: [reference] }) }));
+  await page.route(url => ['/review-a/q.json', '/review-b/q.json'].includes(new URL(url).pathname), route => route.fulfill({ status: 200, contentType: 'application/json', body: content }));
+  await page.goto('/evidence/?manifest=/review-a/manifest.json');
+  await expect(page.getByRole('heading', { name: 'Manifest A' })).toBeVisible();
+  await page.getByLabel('Review manifest URL').fill(new URL('/review-b/manifest.json', page.url()).href);
+  await page.getByRole('button', { name: 'Load' }).click();
+  await expect(page.getByRole('heading', { name: 'Manifest B' })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole('heading', { name: 'Manifest A' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: question })).toBeVisible();
+});
+
+test('page tools and manual data tabs present the same retained view with reversible history', async ({ page }) => {
+  const content = await canonicalPackage(packageValue);
+  const fixture = { schema: 'okf-evidence-workbench.v1', title: 'Tool review', publication: { label: 'Experimental' }, questions: [
+    { id: 'q-01', label: 'Question 1', question, package: { url: 'q.json', sha256: await hash(content) } }
+  ] };
+  await page.addInitScript(() => {
+    const tools = new Map<string, unknown>();
+    Object.defineProperty(document, 'modelContext', { configurable: true, value: {
+      registerTool(tool: { name: string }) { tools.set(tool.name, tool); }
+    } });
+    Object.defineProperty(window, '__workbenchTools', { value: tools });
+  });
+  await page.route(url => new URL(url).pathname === '/evaluation/evidence-workbench/manifest.json', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(fixture) }));
+  await page.route(url => new URL(url).pathname === '/evaluation/evidence-workbench/q.json', route => route.fulfill({ status: 200, contentType: 'application/json', body: content }));
+  await page.goto('/evidence/');
+  await expect(page.getByText('Workbench page tools registered.')).toBeVisible();
+  const before = await page.evaluate(async () => {
+    const tools = (window as unknown as { __workbenchTools: Map<string, { execute: (input: unknown) => Promise<unknown> }> }).__workbenchTools;
+    return { count: tools.size, state: await tools.get('okf_get_state')!.execute({}) };
+  });
+  expect(before.count).toBe(7);
+  expect((before.state as { data: { ready: boolean } }).data.ready).toBe(false);
+  await page.getByLabel('Review manifest URL').fill(new URL('/evaluation/evidence-workbench/manifest.json', page.url()).href);
+  await page.getByRole('button', { name: 'Load' }).click();
+  await expect(page.getByRole('heading', { name: question })).toBeVisible();
+  const retained = await page.evaluate(async () => {
+    const tools = (window as unknown as { __workbenchTools: Map<string, { execute: (input: unknown) => Promise<any> }> }).__workbenchTools;
+    const state = await tools.get('okf_get_state')!.execute({});
+    const snapshot_id = state.snapshot_id;
+    const data = await tools.get('okf_get_view_data')!.execute({ view: 'graph', case_id: 'q-01', max_bytes: 32768, snapshot_id });
+    const shown = await tools.get('okf_show_view')!.execute({ result_id: data.result_id, expected_revision: state.state_revision, snapshot_id });
+    return { data, shown };
+  });
+  expect(retained.data.error).toBeUndefined();
+  expect(retained.data.data.coverage.complete).toBe(true);
+  expect(retained.shown.error).toBeUndefined();
+  await expect(page.getByRole('link', { name: 'Graph', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('heading', { name: 'Directed graph' })).toBeVisible();
+  await expect(page.getByRole('table').first().getByRole('button', { name: /img src/ })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole('link', { name: 'Original source' })).toHaveAttribute('aria-current', 'page');
+  await page.goForward();
+  await expect(page.getByRole('link', { name: 'Graph', exact: true })).toHaveAttribute('aria-current', 'page');
+  await page.getByRole('table').first().getByRole('button', { name: /img src/ }).click();
+  await expect(page.getByRole('link', { name: 'Original source' })).toHaveAttribute('aria-current', 'page');
+  await page.goBack();
+  await expect(page.getByRole('link', { name: 'Graph', exact: true })).toHaveAttribute('aria-current', 'page');
+  await page.getByRole('link', { name: 'Requirements', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Evidence requirements', exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Rates', exact: true }).click();
+  await expect(page.getByText('Unknown rates and readiness values are not zero.')).toBeVisible();
+  await page.getByRole('link', { name: 'Calculation stages' }).click();
+  await expect(page.getByText('It does not calculate an award or decide entitlement.')).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  expect(await page.locator('img').count()).toBe(0);
+  const accessibility = await new AxeBuilder({ page }).analyze();
+  expect(accessibility.violations).toEqual([]);
+});

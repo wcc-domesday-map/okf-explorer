@@ -4,7 +4,7 @@
 
 ## Open the pack
 
-Use the [hosted Explorer link](https://chris-page-gov.github.io/okf-explorer/?bundle=https%3A%2F%2Fchris-page-gov.github.io%2Fai-infrastructure-wiki%2Flegislation%2Fokf-explorer.json&view=reader#overview). It opens the corpus overview without hydrating every work or provision.
+Use the [hosted Explorer link](https://chris-page-gov.github.io/okf-explorer/?bundle=https%3A%2F%2Fchris-page-gov.github.io%2Fokf-uk-legislation%2Fokf-explorer.json&view=reader#overview). It opens the corpus overview without hydrating every work or provision.
 
 The overview establishes the corpus boundary: legal-work count, official manifestation count, represented years, document types, categories and current source notices.
 
@@ -25,6 +25,7 @@ Local title search is combined with the official legislation.gov.uk full-text At
 3. Select **Load every Part, Chapter, section, article and nested provision**.
 4. Search within the instrument for a section number or phrase.
 5. Use **Selected passage** to open the official pinpoint URL.
+   The Reader shows a labelled excerpt for long passages. Select **Show full passage text** to read the complete normalised text before citing it. The official link keeps a dated, enacted or made version after the provision path where one is supplied.
 6. Use **Copy provenance citation** as the starting point for a citation ledger.
 7. Separately check version, commencement, extent, amendments and unapplied effects.
 
@@ -41,6 +42,7 @@ Every material proposition should record:
 - any unresolved amendment, interpretation or missing-fact issue.
 
 An Act landing page on its own is not pinpoint provenance. A catalogue result on its own is not the law.
+CLML is loaded on demand with an 8 MiB response limit and a 20,000-element parse limit. If either limit is reached, open the official CLML directly. The Reader keeps source element IDs, hierarchy, status and source version separate from its normalised labels and excerpt. Parent passage text includes nested wording; the tree also shows each nested provision separately. The source details show the byte length and SHA-256 hash of the downloaded XML, which you can save.
 
 ## Next steps
 

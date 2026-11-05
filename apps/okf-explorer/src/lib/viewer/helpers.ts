@@ -1,4 +1,6 @@
 import type { LargeAnalysisOverview, LargeDataset, LargeDatasetOperationalMetadata, LargeResource, OkfNode, OkfRelationship } from '$lib/types';
+import { normalizeExplorerDisplay } from './facetPresentation';
+import { decodeEndpointRouteSegment, encodeEndpointRouteSegment } from './endpointLabels';
 
 export type AnalysisFacet = NonNullable<LargeAnalysisOverview['facet_analysis']>[number];
 export type AnalysisHierarchy = NonNullable<LargeAnalysisOverview['hierarchies']>[number];
@@ -13,6 +15,21 @@ export type DatasetDateContext = {
   years: string[];
   series: string;
   seriesKey: string;
+};
+
+export type DatasetReleasePeriod = {
+  label: string;
+  sortKey: string;
+  year: string;
+  month: number;
+  source: 'declared' | 'release' | 'title' | 'resource' | 'catalogue';
+  catalogueFallback: boolean;
+};
+
+export type DatasetDisplaySeries = {
+  label: string;
+  key: string;
+  inferred: boolean;
 };
 
 export type DatasetOperationalContext = {
@@ -34,6 +51,20 @@ export type DatasetOperationalContext = {
 };
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTH_NUMBER = new Map([
+  ['jan', 1], ['january', 1],
+  ['feb', 2], ['february', 2],
+  ['mar', 3], ['march', 3],
+  ['apr', 4], ['april', 4],
+  ['may', 5],
+  ['jun', 6], ['june', 6],
+  ['jul', 7], ['july', 7],
+  ['aug', 8], ['august', 8],
+  ['sep', 9], ['sept', 9], ['september', 9],
+  ['oct', 10], ['october', 10],
+  ['nov', 11], ['november', 11],
+  ['dec', 12], ['december', 12]
+]);
 
 function recordString(record: Record<string, unknown> | undefined, key: string): string {
   const value = record?.[key];
@@ -99,6 +130,172 @@ function yearsFromValue(value: unknown): string[] {
   return String(value).match(/\b(?:18|19|20|21)\d{2}\b/g) || [];
 }
 
+function stringsFromValue(value: unknown): string[] {
+  if (Array.isArray(value)) return value.flatMap(stringsFromValue);
+  if (value && typeof value === 'object') return Object.values(value as Record<string, unknown>).flatMap(stringsFromValue);
+  if (typeof value !== 'string' && typeof value !== 'number') return [];
+  const text = String(value).trim();
+  return text ? [text] : [];
+}
+
+function releasePeriodFromText(
+  value: string,
+  source: DatasetReleasePeriod['source']
+): DatasetReleasePeriod | null {
+  const monthYear = new RegExp(
+    `\\b(${[...MONTH_NUMBER.keys()].sort((left, right) => right.length - left.length).join('|')})[\\s._/-]+((?:18|19|20|21)\\d{2})\\b`,
+    'i'
+  ).exec(value);
+  if (monthYear) {
+    const month = MONTH_NUMBER.get(monthYear[1].toLowerCase()) || 0;
+    const year = monthYear[2];
+    return {
+      label: `${MONTH_NAMES[month - 1]} ${year}`,
+      sortKey: `${year}-${String(month).padStart(2, '0')}`,
+      year,
+      month,
+      source,
+      catalogueFallback: source === 'catalogue'
+    };
+  }
+
+  const isoDate = /\b((?:18|19|20|21)\d{2})-(\d{2})(?:-\d{2})?\b/.exec(value);
+  if (isoDate) {
+    const month = Number(isoDate[2]);
+    const year = isoDate[1];
+    if (month >= 1 && month <= 12) {
+      return {
+        label: `${MONTH_NAMES[month - 1]} ${year}`,
+        sortKey: `${year}-${String(month).padStart(2, '0')}`,
+        year,
+        month,
+        source,
+        catalogueFallback: source === 'catalogue'
+      };
+    }
+  }
+
+  const quarter = /(?:\bQ([1-4])[\s._/-]+((?:18|19|20|21)\d{2})\b|\b((?:18|19|20|21)\d{2})[\s._/-]+Q([1-4])\b)/i.exec(value);
+  if (quarter) {
+    const year = quarter[2] || quarter[3];
+    const quarterNumber = Number(quarter[1] || quarter[4]);
+    const month = quarterNumber * 3;
+    return {
+      label: `Q${quarterNumber} ${year}`,
+      sortKey: `${year}-${String(month).padStart(2, '0')}`,
+      year,
+      month,
+      source,
+      catalogueFallback: source === 'catalogue'
+    };
+  }
+
+  const year = value.match(/\b(?:18|19|20|21)\d{2}\b/)?.[0] || '';
+  return year
+    ? { label: year, sortKey: year, year, month: 0, source, catalogueFallback: source === 'catalogue' }
+    : null;
+}
+
+function explicitSeries(dataset: LargeDataset): { label: string; id: string } {
+  const direct = dataset as Record<string, unknown>;
+  const extras = dataset.extras;
+  return {
+    label:
+      recordString(direct, 'series_title') ||
+      recordString(direct, 'series') ||
+      recordString(extras, 'series_title') ||
+      recordString(extras, 'series'),
+    id: recordString(direct, 'series_id') || recordString(extras, 'series_id')
+  };
+}
+
+function inferredSeriesTitle(title: string): string {
+  let label = title.trim();
+  const monthPattern = [...MONTH_NUMBER.keys()].join('|');
+  label = label
+    .replace(new RegExp(`\\s*\\((?:${monthPattern})[\\s._/-]+(?:18|19|20|21)\\d{2}\\)`, 'gi'), ' ')
+    .replace(/\s*\((?:epoch|edition|release|version)\s+[^)]*\)/gi, ' ')
+    .replace(/\s*\(v(?:ersion)?\s*\d+(?:\.\d+)*\)/gi, ' ')
+    .replace(/\s+(?:v(?:ersion)?\s*\d+(?:\.\d+)*)\s*$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  for (let pass = 0; pass < 3; pass += 1) {
+    const next = label
+      .replace(/\s*\((?:epoch|edition|release|version)\s+[^)]*\)\s*$/i, '')
+      .replace(
+        new RegExp(`\\s*\\((?:${monthPattern})[\\s._/-]+(?:18|19|20|21)\\d{2}\\)\\s*$`, 'i'),
+        ''
+      )
+      .replace(/\s*\((?:18|19|20|21)\d{2}\)\s*$/, '')
+      .trim();
+    if (next === label) break;
+    label = next;
+  }
+  return label || title.trim();
+}
+
+export function datasetDisplaySeries(dataset: LargeDataset): DatasetDisplaySeries {
+  const declared = explicitSeries(dataset);
+  if (declared.label || declared.id) {
+    const label = declared.label || dataset.title;
+    return {
+      label,
+      key: declared.id ? `id:${declared.id}` : `label:${normalizedSeriesValue(label)}`,
+      inferred: false
+    };
+  }
+  const label = inferredSeriesTitle(dataset.title);
+  return {
+    label,
+    key: `presentation:${normalizedSeriesValue(label)}`,
+    inferred: label !== dataset.title.trim()
+  };
+}
+
+export function datasetReleasePeriod(dataset: LargeDataset, resources: LargeResource[] = []): DatasetReleasePeriod | null {
+  const direct = dataset as Record<string, unknown>;
+  const declared = [
+    direct.temporal_coverage,
+    direct.coverage_years,
+    dataset.extras?.temporal_coverage,
+    dataset.extras?.coverage_years,
+    dataset.year
+  ];
+  for (const value of declared.flatMap(stringsFromValue)) {
+    const period = releasePeriodFromText(value, 'declared');
+    if (period) return period;
+  }
+  const releaseDate = stringValue(operationalMetadata(dataset.operational_metadata)?.latest_release?.date);
+  const releaseMatch = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/.exec(releaseDate);
+  if (releaseMatch) {
+    const year = Number(releaseMatch[1]);
+    const month = Number(releaseMatch[2] || 1);
+    const day = Number(releaseMatch[3] || 1);
+    const calendar = new Date(0);
+    calendar.setUTCFullYear(year, month - 1, day);
+    // Validate partial dates without upgrading their precision. Labels and
+    // dynamic release markers are not evidence of a publication date.
+    if (year > 0 && calendar.getUTCFullYear() === year && calendar.getUTCMonth() === month - 1 && calendar.getUTCDate() === day) {
+      const period = releasePeriodFromText(releaseDate, 'release');
+      if (period) return period;
+    }
+  }
+  const titlePeriod = releasePeriodFromText(dataset.title, 'title');
+  if (titlePeriod) return titlePeriod;
+  for (const resource of resources) {
+    for (const value of [resource.name, resource.description].flatMap(stringsFromValue)) {
+      const period = releasePeriodFromText(value, 'resource');
+      if (period) return period;
+    }
+  }
+  for (const value of [dataset.published_at, dataset.updated_at, dataset.metadata_modified, dataset.timestamp, dataset.metadata_created]) {
+    if (typeof value !== 'string') continue;
+    const period = releasePeriodFromText(value, 'catalogue');
+    if (period) return period;
+  }
+  return null;
+}
+
 export function sourceDateLabel(value: string): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
   if (!match) return value;
@@ -109,12 +306,7 @@ export function sourceDateLabel(value: string): string {
 export function datasetDateContext(dataset: LargeDataset, resources: LargeResource[] = []): DatasetDateContext {
   const direct = dataset as Record<string, unknown>;
   const extras = dataset.extras;
-  const series =
-    recordString(direct, 'series_title') ||
-    recordString(direct, 'series') ||
-    recordString(extras, 'series_title') ||
-    recordString(extras, 'series');
-  const seriesId = recordString(direct, 'series_id') || recordString(extras, 'series_id');
+  const { label: series, id: seriesId } = explicitSeries(dataset);
   const declaredCoverage = [direct.temporal_coverage, direct.coverage_years, extras?.temporal_coverage, extras?.coverage_years, dataset.year];
   const resourceCoverage = resources.flatMap((resource) => yearsFromValue([resource.name, resource.description]));
   const years = [...new Set([...declaredCoverage.flatMap(yearsFromValue), ...resourceCoverage])].sort();
@@ -212,6 +404,22 @@ export function relatedSeriesDatasets(dataset: LargeDataset, datasets: LargeData
     });
 }
 
+export function relatedDisplaySeriesDatasets(dataset: LargeDataset, datasets: LargeDataset[]): LargeDataset[] {
+  const series = datasetDisplaySeries(dataset);
+  if (!series.key || (series.inferred && !series.key.startsWith('presentation:'))) return [];
+  return datasets
+    .filter((candidate) => {
+      if (candidate.name === dataset.name) return false;
+      if (datasetDisplaySeries(candidate).key !== series.key) return false;
+      return !dataset.publisher || !candidate.publisher || candidate.publisher === dataset.publisher;
+    })
+    .sort((left, right) => {
+      const leftPeriod = datasetReleasePeriod(left)?.sortKey || '';
+      const rightPeriod = datasetReleasePeriod(right)?.sortKey || '';
+      return rightPeriod.localeCompare(leftPeriod) || left.title.localeCompare(right.title);
+    });
+}
+
 export function colorForType(type = 'Node'): string {
   const known: Record<string, string> = {
     dataset: '#0b6bcb',
@@ -252,7 +460,11 @@ export function metadataGapLabel(value: string): string {
 
 export function facetValueLabel(analysis: LargeAnalysisOverview | undefined, key: string, value: string): string {
   if (value === 'not-specified') return metadataGapLabel(value);
-  const analysisLabel = analysisLabelForRoute(analysis, `facet/${key}/${value}`);
+  const canonicalRoute = `facet/${encodeEndpointRouteSegment(key)}/${encodeEndpointRouteSegment(value)}`;
+  const analysisLabel = analysisLabelForRoute(analysis, canonicalRoute) ||
+    // Keep pre-profile analysis artefacts readable while producers migrate to
+    // canonical percent-encoded route segments.
+    analysisLabelForRoute(analysis, `facet/${key}/${value}`);
   return analysisLabel || metadataGapLabel(value);
 }
 
@@ -267,19 +479,42 @@ export function selectedFacetValueSummary(
 }
 
 export function formatPercent(value: number | undefined): string {
-  if (value === undefined || Number.isNaN(value)) return 'n/a';
+  if (value === undefined || !Number.isFinite(value) || value < 0 || value > 1) return 'n/a';
   return `${Math.round(value * 100)}%`;
 }
 
 export function isHttpUrl(value: unknown): value is string {
-  return typeof value === 'string' && /^https?:\/\//i.test(value);
+  if (typeof value !== 'string' || !value || value.trim() !== value) return false;
+  if (
+    /[^\x21-\x7e]/.test(value) ||
+    /[\s"'<>\\^`{|}]/.test(value) ||
+    /%(?![0-9A-Fa-f]{2})/.test(value)
+  ) return false;
+  if (!/^https?:\/\/(?:\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?)(?::(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]))?(?:[/?#]|$)/i.test(value)) {
+    return false;
+  }
+  try {
+    const url = new URL(value);
+    return (
+      ['http:', 'https:'].includes(url.protocol) &&
+      !url.username &&
+      !url.password
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function routeForAnalysisNode(id: string): { key: string; value: string } | null {
   if (!id.startsWith('facet/')) return null;
   const [, key, ...valueParts] = id.split('/');
   const value = valueParts.join('/');
-  return key && value ? { key, value } : null;
+  return key && value
+    ? {
+        key: decodeEndpointRouteSegment(key),
+        value: decodeEndpointRouteSegment(value)
+      }
+    : null;
 }
 
 export function timelineBucketFacetFilter(bucket: AnalysisTimelineBucket): { key: string; value: string } | null {
@@ -309,8 +544,14 @@ export function analysisFacetRows(
 ): AnalysisFacet[] {
   if (analysis?.facet_analysis?.length) {
     const tierWeight: Record<string, number> = { primary: 0, secondary: 1, advanced: 2, suppressed: 3 };
+    const display = normalizeExplorerDisplay(analysis.display);
+    const configuredOrder = new Map((display.facets?.order || []).map((key, index) => [key, index]));
+    const configuredPins = new Set(display.facets?.pinned || []);
     return [...analysis.facet_analysis].sort(
       (left, right) =>
+        Number(!(left.default_pinned || configuredPins.has(left.key))) - Number(!(right.default_pinned || configuredPins.has(right.key))) ||
+        (configuredOrder.get(left.key) ?? Number.MAX_SAFE_INTEGER) - (configuredOrder.get(right.key) ?? Number.MAX_SAFE_INTEGER) ||
+        (left.display_priority ?? Number.MAX_SAFE_INTEGER) - (right.display_priority ?? Number.MAX_SAFE_INTEGER) ||
         (tierWeight[left.recommendation] ?? 2) - (tierWeight[right.recommendation] ?? 2) ||
         right.expected_reduction - left.expected_reduction ||
         left.label.localeCompare(right.label)

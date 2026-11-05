@@ -9,37 +9,64 @@ export type OkfNode = {
   description?: string;
   summary?: string;
   timestamp?: string;
+  generated?: {
+    by?: string;
+    at?: string;
+    [key: string]: unknown;
+  };
+  sources?: Array<{
+    resource?: string;
+    [key: string]: unknown;
+  }>;
+  usage_window?: {
+    from?: string;
+    to?: string;
+    [key: string]: unknown;
+  };
+  verified?: Record<string, unknown> | Array<Record<string, unknown>>;
+  status?: string;
+  stale_after?: string;
+  runtime?: string;
+  parameters?: Array<Record<string, unknown>>;
+  computation?: string;
+  executor?: Record<string, unknown>;
+  attester?: Record<string, unknown>;
   aliases?: string[];
   tags?: string[];
   body?: string;
-  resource?: string;
-  source_url?: string;
-  source_id?: string;
-  source_record_id?: string;
-  retrieved_at?: string;
-  published_at?: string;
-  attribution?: string;
-  rights_url?: string;
-  reuse_basis?: string;
-  confidence?: string;
-  method?: string;
-  facts?: Array<{ label?: string; value?: unknown }>;
-  notes?: string[] | string;
-  semantic_types?: string[];
   [key: string]: unknown;
 };
 
 export type OkfRelationship = {
+  schema?: 'okf-relationship-assertion.v2' | string;
   id?: string;
   source: string;
   target: string;
+  source_iri?: string;
+  target_iri?: string;
   kind?: string;
   type?: string;
   label?: string;
+  inverse_label?: string;
   predicate?: string;
-  method?: string;
-  confidence?: string;
-  evidence?: string;
+  assertion_status?: RelationshipAssertionStatus | string;
+  assertion_scope?: RelationshipAssertionScope | string;
+  authority?: FederationAuthority | RelationshipAuthorityClass | string;
+  authority_class?: RelationshipAuthorityClass | string;
+  derivation?: string;
+  derivation_activity?: string;
+  rule?: string;
+  supporting_assertions?: string[];
+  confidence?: string | number;
+  confidence_score?: number;
+  strength?: number;
+  count?: number;
+  observed_at?: string;
+  stale_after?: string;
+  freshness?: FederationFreshnessState | string;
+  review_status?: string;
+  evidence?: Array<string | Record<string, unknown>>;
+  rights?: string | Record<string, unknown>;
   [key: string]: unknown;
 };
 
@@ -47,12 +74,22 @@ export type NormalizedCorpus = {
   id: string;
   title: string;
   description?: string;
+  okfVersion?: string;
+  profile?: string;
   nodes: Record<string, OkfNode>;
   relationships: OkfRelationship[];
+  assertionScope?: RelationshipAssertionScope;
+  defaultLoaded?: boolean;
+  includeInCounts?: boolean;
+  includeInSearch?: boolean;
   meta?: Record<string, unknown>;
 };
 
 export type OkfBundle = {
+  '@context'?: unknown;
+  '@id'?: string;
+  '@type'?: string | string[];
+  '@graph'?: Array<Record<string, unknown>>;
   okf_version?: string;
   version?: string;
   title?: string;
@@ -62,9 +99,180 @@ export type OkfBundle = {
     generated_at?: string;
     [key: string]: unknown;
   };
-  corpora?: Record<string, Partial<NormalizedCorpus>>;
+  corpora?: Record<string, Partial<NormalizedCorpus> & { edges?: OkfRelationship[] }>;
   nodes?: Record<string, OkfNode>;
   relationships?: OkfRelationship[];
+  edges?: OkfRelationship[];
+  extensions?: Record<string, Record<string, unknown>>;
+};
+
+export type RelationshipAuthorityClass =
+  | 'official'
+  | 'derived'
+  | 'model-assisted'
+  | 'synthetic'
+  | 'unclassified';
+
+export type RelationshipAssertionStatus =
+  | 'official'
+  | 'normalized'
+  | 'inferred'
+  | 'model-derived';
+
+export type RelationshipAssertionScope =
+  | 'real-world'
+  | 'synthetic-fixture';
+
+export type FederationAvailability =
+  | 'available'
+  | 'partial'
+  | 'restricted'
+  | 'unavailable'
+  | 'planned';
+
+export type FederationFreshnessState = 'current' | 'stale' | 'unknown';
+
+export type FederationRouteKind =
+  | 'published'
+  | 'raw'
+  | 'release'
+  | 'repository'
+  | 'documentation'
+  | 'semantic'
+  | string;
+
+export type FederationAccessRoute = {
+  kind: FederationRouteKind;
+  url: string;
+  purpose?: 'descriptor' | 'source' | 'documentation' | 'archive' | 'semantic' | string;
+  media_type?: string;
+  priority?: number;
+  label?: string;
+};
+
+export type FederationAuthority = {
+  class: RelationshipAuthorityClass | string;
+  label?: string;
+  source?: string;
+};
+
+export type FederationCoverage = {
+  status: FederationAvailability;
+  applicable?: number;
+  represented?: number;
+  assertions?: number;
+  percent?: number;
+  as_of?: string;
+  notes?: string[];
+};
+
+export type FederationFreshness = {
+  state?: FederationFreshnessState;
+  observed_at?: string;
+  snapshot?: string;
+  stale_after?: string;
+};
+
+export type FederationDiscovery = {
+  repository: string;
+  documentation: string;
+  raw_subpath: string;
+  release_archive: string;
+  semantic_descriptor?: string;
+  routes: FederationAccessRoute[];
+};
+
+export type FederationChild = {
+  id: string;
+  title: string;
+  description?: string;
+  role: string;
+  status: FederationAvailability;
+  descriptor?: string;
+  semantic_descriptor?: string;
+  bound_relative_descriptor?: string;
+  bound_relative_semantic_descriptor?: string;
+  authority: FederationAuthority;
+  coverage: FederationCoverage;
+  freshness: FederationFreshness;
+  discovery: FederationDiscovery;
+  counts?: Record<string, number>;
+  extensions?: Record<string, unknown>;
+};
+
+export type FederationSourceFamily = {
+  id: string;
+  title: string;
+  definition?: string;
+  authority_class: string;
+  coverage_status: FederationAvailability;
+  source_count: number;
+  source_ids?: string[];
+  related_source_classes?: string[];
+  minimum_provenance?: string;
+  implemented_bundle?: string;
+};
+
+export type FederationRelationshipAssertion = OkfRelationship & {
+  schema?: 'okf-relationship-assertion.v2' | string;
+  predicate: string;
+  authority: FederationAuthority;
+  derivation: string;
+};
+
+export type FederationRelationshipSummary = {
+  scope: 'federated-data-plane' | 'federation-control-plane' | string;
+  total: number;
+  by_predicate: Record<string, number>;
+  by_authority: {
+    official: number;
+    derived: number;
+    'model-assisted': number;
+    synthetic?: number;
+    unclassified?: number;
+    [key: string]: number | undefined;
+  };
+  by_freshness: {
+    current: number;
+    stale: number;
+    unknown: number;
+    [key: string]: number;
+  };
+  observed_at?: string;
+  snapshot?: string;
+};
+
+export type FederationDescriptor = {
+  '@context'?: string | Record<string, unknown> | Array<string | Record<string, unknown>>;
+  '@id'?: string;
+  schema: 'okf-explorer-federation.v1';
+  kind: 'okf-federation';
+  okf_version: string;
+  title: string;
+  description?: string;
+  version: string;
+  status: string;
+  generated_at: string;
+  snapshot: string;
+  profile: string;
+  publisher: string;
+  license: string;
+  discovery: FederationDiscovery;
+  counts: Record<string, number>;
+  children: FederationChild[];
+  source_families?: FederationSourceFamily[];
+  relationships?: FederationRelationshipAssertion[];
+  relationship_summary: FederationRelationshipSummary;
+  notices?: string[];
+  extensions?: Record<string, unknown>;
+};
+
+export type FederationOverview = {
+  descriptor: FederationDescriptor;
+  requestedUrl: string;
+  resolvedUrl: string;
+  attemptedUrls: string[];
+  inlineRelationshipSummary: FederationRelationshipSummary;
 };
 
 export type LargeResourceReference =
@@ -73,6 +281,8 @@ export type LargeResourceReference =
       path: string;
       sha256?: string;
       compression?: 'identity' | 'gzip' | string;
+      /** Exact bytes before the resource's own compression is decoded. */
+      bytes?: number;
     };
 
 export type LargeShardMetadata = {
@@ -124,18 +334,31 @@ export type LargeReleaseDataPlaneIndex = {
 };
 
 export type LargeCorpusDescriptor = {
+  /** Optional bounded teaching overlay, validated by the Reader. */
+  learning_presentation?: unknown;
   '@context'?: string | Record<string, unknown> | Array<string | Record<string, unknown>>;
   '@id'?: string;
   schema: 'okf-explorer-large-corpus.v1' | string;
   kind: 'okf-large-corpus' | string;
+  okf_version?: string;
+  core_conformance?: string;
   title: string;
   description?: string;
+  /** Optional links to related material, validated before rendering. */
+  related_links?: unknown;
   version?: string;
   status?: string;
+  assertion_scope?: RelationshipAssertionScope | string;
+  default_loaded?: boolean;
+  include_in_counts?: boolean;
+  include_in_search?: boolean;
   profile?: string;
   publisher?: string;
   license?: string;
   semantic_descriptor?: string;
+  semantic_jsonld?: string;
+  semantic_yamlld?: string;
+  discovery?: FederationDiscovery;
   generated_at?: string;
   snapshot?: string;
   snapshot_id?: string;
@@ -143,16 +366,44 @@ export type LargeCorpusDescriptor = {
   entrypoints: {
     viewer?: string;
     data_manifest: string;
+    markdown_index?: string;
+    conformance?: LargeResourceReference;
+    semantic_jsonld?: string;
+    semantic_yamlld?: string;
+    terms?: LargeResourceReference;
+    term_validation?: LargeResourceReference;
     overview_index?: string;
     analysis_overview?: string;
+    presentation?: LargeResourceReference;
+    endpoint_labels?: LargeResourceReference;
     search_manifest?: string;
+    /** Optional, digest-bound projection for governed context assembly. */
+    context_assembly?: LargeResourceReference;
+    context_corpus?: LargeResourceReference;
+    record_locator?: LargeResourceReference;
+    /** Optional snapshot-bound source references for one selected record. */
+    record_resources?: LargeResourceReference;
     notes?: string;
     performance?: string;
     relationship_adjacency?: string;
+    relationship_runtime?: LargeResourceReference;
+    model_enrichment_v3?: LargeResourceReference;
+    model_enrichment_v3_accepted_manifest?: LargeResourceReference;
+    model_enrichment_v3_coverage?: LargeResourceReference;
+    model_enrichment_v3_independent_audit?: LargeResourceReference;
+    model_enrichment_v3_reviewer?: LargeResourceReference;
+    model_enrichment_v2?: LargeResourceReference;
+    model_enrichment_v2_historical?: LargeResourceReference;
+    model_enrichment_v2_historical_manifest?: LargeResourceReference;
+    official_effects?: LargeResourceReference;
     operational_metadata?: string;
+    provider_datapacks?: LargeResourceReference;
     release_data_plane?: LargeResourceReference;
   };
   entrypoint_integrity?: Record<string, Exclude<LargeResourceReference, string>>;
+  /** Strict Explore OKF learning-publication contract; validated before display. */
+  exploratory_publication?: Record<string, unknown>;
+  indexing_policy?: string;
   distribution?: {
     control_plane?: string;
     data_plane?: string;
@@ -187,12 +438,24 @@ export type LargeDataManifest = {
   indexes: {
     overview: string;
     analysis?: string;
+    presentation?: string;
     search?: string;
+    /** Compact, snapshot-bound labels and types for graph-reachable routes. */
+    endpoint_labels?: LargeResourceReference;
+    record_locator?: LargeResourceReference;
+    record_resources?: LargeResourceReference;
     facets?: string;
     graph?: string;
     govuk_content?: string;
     relationship_adjacency?: string;
+    relationship_runtime?: LargeResourceReference;
+    model_enrichment_v3?: LargeResourceReference;
+    model_enrichment_v2?: LargeResourceReference;
+    official_effects?: LargeResourceReference;
     operational_metadata?: string;
+    provider_datapacks?: LargeResourceReference;
+    terms?: LargeResourceReference;
+    term_validation?: LargeResourceReference;
   };
   chunks: Record<string, LargeResourceReference[]>;
   shards?: Record<string, LargeShardMetadata[]>;
@@ -225,6 +488,10 @@ export type LargeSearchManifest = {
   shard_manifest_sha256?: string;
   postings_partitioning?: Record<string, unknown>;
   doc_map_partitioning?: Record<string, unknown>;
+  /** Optional, bounded one-edit correction contract for v2 static indexes. */
+  typo_tolerance?: LargeSearchTypoTolerance;
+  /** Optional, exact v2 contract for producer-aligned query token grouping. */
+  query_policy?: LargeSearchQueryPolicy;
   entrypoints: {
     lexicon: Record<string, string>;
     prefixes: Record<string, string>;
@@ -235,22 +502,57 @@ export type LargeSearchManifest = {
     filter_postings?: Record<string, string>;
     sort_values?: string;
     entities?: string;
+    /** Symmetric-delete key shards, addressed by their normalised key prefix. */
+    typo_deletions?: Record<string, string>;
   };
+};
+
+export type LargeSearchQueryPolicy = {
+  schema: 'okf-search-query-policy.v1';
+  tokeniser: 'nfkd-lowercase-ascii-alphanumeric-component-v1';
+  stopwords: string[];
+  minimum_should_match: {
+    apply_from_query_tokens: number;
+    minimum_matches: number;
+    ratio_numerator: number;
+    ratio_denominator: number;
+  };
+};
+
+export type LargeSearchTypoTolerance = {
+  schema: 'okf-search-typo-tolerance.v1' | string;
+  algorithm: 'symmetric-delete-damerau-levenshtein-v1' | string;
+  max_edit_distance: number;
+  min_token_length: number;
+  max_token_length: number;
+  max_delete_keys_per_token: number;
+  max_candidates_per_delete_key: number;
+  max_candidates_per_token: number;
+  max_corrected_tokens_per_query: number;
+  max_shards_per_query: number;
+  max_keys_per_shard: number;
+  shard_length: number;
 };
 
 export type SearchRankingStrategy = 'weighted' | 'idf' | 'idf-exact';
 
 export type LargeSearchRequest = {
+  /** Complete-set exploration, evaluated before the display and hydration limits. */
+  exploration?: import('./viewer/facetSelection').Exploration;
   query: string;
   filters: Record<string, string[]>;
   sort: 'relevance' | 'newest' | 'title' | 'metadata-quality';
   ranking?: SearchRankingStrategy;
   facet_keys?: string[];
+  /** Skip result-document hydration when only exact facet distributions are required. */
+  include_results?: boolean;
 };
 
 export type SearchMatchExplanation = {
   query_tokens: string[];
   matched_fields: string[];
+  /** One-edit rewrites whose postings contributed to this result. */
+  corrected_tokens?: SearchTokenCorrection[];
   recognized_entity?: SearchEntityMatch;
   score_components: {
     weighted: number;
@@ -259,6 +561,15 @@ export type SearchMatchExplanation = {
     entity?: number;
     total: number;
   };
+};
+
+export type SearchTokenCorrection = {
+  query_token: string;
+  matched_token: string;
+  edit_distance: 1;
+  method: 'symmetric-delete-damerau-levenshtein-v1';
+  /** Stable rank among the bounded candidates considered for this query token. */
+  candidate_rank: number;
 };
 
 export type SearchEntity = {
@@ -288,6 +599,12 @@ export type LargeSearchTruncation = {
 };
 
 export type LargeSearchResponse = {
+  exploration?: {
+    highlighted_count: number;
+    scope_ids?: number[];
+    highlighted_ids?: number[];
+    facets: Record<string, LargeFacetRow[]>;
+  };
   results: SearchResultDoc[];
   total: number;
   /** Whether total is exact, a lower bound, or only the size of an approximate candidate set. */
@@ -304,6 +621,22 @@ export type LargeSearchResponse = {
   ranking: SearchRankingStrategy;
   elapsed_ms: number;
   interpreted_entity?: SearchEntityMatch;
+  /** All verified token rewrites admitted to this query's candidate groups. */
+  query_corrections?: SearchTokenCorrection[];
+  /** Meaningful query tokens that had no exact, prefix, entity or accepted one-edit match. */
+  unresolved_tokens?: string[];
+  /** Deterministic explanation of an explicitly declared query-policy decision. */
+  query_policy?: {
+    schema: 'okf-search-query-policy-result.v1';
+    mode: 'minimum-should-match';
+    tokeniser: 'nfkd-lowercase-ascii-alphanumeric-component-v1';
+    query_token_count: number;
+    resolved_token_group_count: number;
+    required_token_group_count: number;
+    unresolved_token_group_count: number;
+  };
+  /** Correction stopped at the declared per-query token or shard budget. */
+  correction_truncated?: boolean;
 };
 
 export type LargeFilterPostings = {
@@ -326,10 +659,289 @@ export type LargeOverview = {
   notices?: string[];
 };
 
+export type LargeFacetValueType = 'nominal' | 'ordinal' | 'number' | 'date' | string;
+
+export type LargeFacetValueOrder =
+  | 'count-desc'
+  | 'label-asc'
+  | 'label-desc'
+  | 'value-asc'
+  | 'value-desc'
+  | string;
+
+export type LargeFacetAnalysis = {
+  key: string;
+  label: string;
+  description?: string;
+  /** Optional producer-declared discovery coverage; not legal applicability. */
+  classification?: import('./viewer/facetClassification').FacetClassification;
+  coverage: number;
+  cardinality: number;
+  top_share: number;
+  entropy: number;
+  expected_reduction: number;
+  recommended_control: string;
+  recommendation: 'primary' | 'secondary' | 'advanced' | 'suppressed' | string;
+  hierarchy_available?: boolean;
+  display_priority?: number;
+  default_pinned?: boolean;
+  default_hidden?: boolean;
+  value_type?: LargeFacetValueType;
+  value_order?: LargeFacetValueOrder;
+  examples?: string[];
+  values?: Array<{ value: string; count: number }>;
+};
+
+export type LargeExplorerDisplay = {
+  facets?: {
+    order?: string[];
+    pinned?: string[];
+    hidden?: string[];
+    default_mode?: 'suggested' | 'all';
+    high_cardinality_threshold?: number;
+    distribution_segments?: number;
+  };
+  detail?: {
+    tabs?: Array<'overview' | 'evidence' | 'data' | string>;
+    default_tab?: 'overview' | 'evidence' | 'data' | string;
+  };
+};
+
+export type LargeExplorerPresentationFacet = {
+  key: string;
+  label?: string;
+  description?: string;
+  value_type?: 'nominal' | 'ordinal' | 'number' | 'date';
+  order?: number;
+  default_state?: 'pinned' | 'shown' | 'hidden';
+  open_control?: 'auto' | 'distribution' | 'histogram' | 'search' | 'list';
+  value_order?: 'count-desc' | 'label-asc' | 'label-desc' | 'value-asc' | 'value-desc';
+  examples?: string[];
+};
+
+export type LargeExplorerPresentation = {
+  schema: 'okf-explorer-presentation.v1';
+  status?: 'experimental' | 'stable' | 'deprecated';
+  snapshot?: string;
+  defaults?: {
+    facet_mode?: 'suggested' | 'all';
+    search_threshold?: number;
+    distribution_segment_limit?: number;
+  };
+  facets?: LargeExplorerPresentationFacet[];
+  panels?: {
+    left?: { tabs?: Array<'facets' | 'browse' | 'results'>; default_tab?: 'facets' | 'browse' | 'results' };
+    right?: { tabs?: Array<'overview' | 'evidence' | 'data'>; default_tab?: 'overview' | 'evidence' | 'data' };
+  };
+};
+
+export type LargeProviderDatapackSelector = {
+  field: string;
+  operator: 'equals';
+  value: string;
+};
+
+export type LargeProviderDatapackRecord = {
+  recordId: string;
+  title: string;
+  timeCoverageEnd?: string;
+  metadataModified?: string;
+  dataModified?: string;
+};
+
+export type LargeProviderDatapackAction = {
+  id: string;
+  label: string;
+  kind: 'external-link';
+  urlTemplate: string;
+  network: 'external';
+};
+
+export type LargeProviderDatapackComparisonStatus =
+  | 'known-drift'
+  | 'aligned'
+  | 'unknown';
+
+export type LargeProviderDatapack = {
+  schema: 'okf-explorer-provider-datapack.v1';
+  snapshot: string;
+  id: string;
+  provider: {
+    id: string;
+    title: string;
+    liveServiceUrl: string;
+    repositoryUrl: string;
+  };
+  selector: LargeProviderDatapackSelector;
+  governedSnapshot: {
+    status: 'governed-pinned-snapshot';
+    label: string;
+    snapshotId: string;
+    recordCount: number;
+    sourceCommit: string;
+    sourceCommitShort: string;
+    sourceAsOf: string;
+    sourceAsOfBasis: string;
+    metadataOnly: true;
+    observationsIncluded: false;
+    records: LargeProviderDatapackRecord[];
+  };
+  reviewedLiveReference: {
+    status: 'reviewed-reference-not-live-validated';
+    label: string;
+    lastChecked: string;
+    network: 'external';
+    liveServiceUrl: string;
+    repositoryUrl: string;
+    sourceCommit: string;
+    sourceCommitShort: string;
+    sourceCommitAsOf: string;
+    metadataInputSha256: string;
+    records: LargeProviderDatapackRecord[];
+  };
+  comparison: {
+    status: LargeProviderDatapackComparisonStatus;
+    comparisonAsOf: string;
+    summary: string;
+    evidenceScope: 'reviewed-record-examples';
+    exhaustive: false;
+    executionRequiresLiveValidation: true;
+    differences: Array<{
+      recordId: string;
+      title: string;
+      fields: Array<{
+        field: string;
+        snapshot: string;
+        reviewedLiveReference: string;
+      }>;
+    }>;
+  };
+  presentation: {
+    snapshotLabel: string;
+    liveLabel: string;
+    lastCheckedWording: string;
+    notice: string;
+    actions: LargeProviderDatapackAction[];
+  };
+};
+
+export type LargeProviderDatapackManifestEntry = {
+  id: string;
+  selector: LargeProviderDatapackSelector;
+  path: string;
+  sha256: string;
+  status: LargeProviderDatapackComparisonStatus;
+  lastChecked: string;
+};
+
+export type LargeProviderDatapackManifest = {
+  schema: 'okf-explorer-provider-datapack-manifest.v1';
+  snapshot: string;
+  packCount: number;
+  packs: LargeProviderDatapackManifestEntry[];
+};
+
+export type LargeProviderDatapackCollection = {
+  manifest: LargeProviderDatapackManifest;
+  packs: LargeProviderDatapack[];
+};
+
+export type LargeRelationshipDatapackChunk = {
+  path: string;
+  sha256: string;
+  bytes: number;
+  records: number;
+  compression: 'gzip' | string;
+  media_type: string;
+};
+
+export type LargeRelationshipDatapackManifest = {
+  schema: 'okf-provider-datapack.v1';
+  id: string;
+  snapshot_id: string;
+  generated_at?: string;
+  chunks: LargeRelationshipDatapackChunk[];
+  counts?: {
+    assertions?: number;
+    by_kind?: {
+      topic: number;
+      concept: number;
+      entity: number;
+    };
+    by_support?: {
+      'title-only': number;
+      'notes-only': number;
+      'metadata-only': number;
+      'multi-field': number;
+    };
+    [key: string]: unknown;
+  };
+  authority?: string;
+  official_legal_classification?: boolean;
+  source_contract?: Record<string, unknown>;
+  independent_audit?: Record<string, unknown>;
+  semantic_reviewer?: Record<string, unknown>;
+  relationship_kinds?: Array<{
+    dimension: 'topic' | 'concept' | 'entity';
+    predicate: string;
+    count: number;
+  }>;
+  provenance?: Record<string, unknown>;
+};
+
+export type LargeModelEnrichmentState = {
+  version: 'v3' | 'v2';
+  mode: 'governed-v3' | 'historical-v2-fallback';
+  status: 'declared' | 'ready' | 'unavailable';
+  label: string;
+  message: string;
+  historicalV2Declared: boolean;
+  counts?: {
+    assertions: number;
+    byKind?: {
+      topic: number;
+      concept: number;
+      entity: number;
+    };
+    bySupport?: {
+      'title-only': number;
+      'notes-only': number;
+      'metadata-only': number;
+      'multi-field': number;
+    };
+  };
+};
+
+export type EffectsReconciliationStateId =
+  | 'agreement'
+  | 'live-addition'
+  | 'superseded'
+  | 'inaccessible';
+
+export type EffectsReconciliationState = {
+  id: EffectsReconciliationStateId;
+  label: string;
+  description: string;
+  count: number;
+};
+
+export type LargeEffectsReconciliation = {
+  schema: 'okf-official-effects-reconciliation.v1';
+  snapshotId: string;
+  generatedAt: string;
+  observedAt: string;
+  releaseEffect: string;
+  receipt: string;
+  scope: string;
+  notice: string;
+  states: EffectsReconciliationState[];
+};
+
 export type LargeAnalysisOverview = {
   schema: 'okf-explorer-analysis.v1' | string;
   generated_at: string;
   source_bundle?: string;
+  display?: LargeExplorerDisplay;
   summary?: {
     title?: string;
     description?: string;
@@ -354,19 +966,7 @@ export type LargeAnalysisOverview = {
     high_resource_datasets?: Array<{ route: string; label: string; count: number; publisher?: string; samples?: Array<{ id: string; label: string; format?: string; host?: string }> }>;
     distributions?: Record<string, Array<{ value: string; count: number }>>;
   };
-  facet_analysis?: Array<{
-    key: string;
-    label: string;
-    coverage: number;
-    cardinality: number;
-    top_share: number;
-    entropy: number;
-    expected_reduction: number;
-    recommended_control: string;
-    recommendation: 'primary' | 'secondary' | 'advanced' | 'suppressed' | string;
-    hierarchy_available?: boolean;
-    values?: Array<{ value: string; count: number }>;
-  }>;
+  facet_analysis?: LargeFacetAnalysis[];
   hierarchies?: Array<{
     id: string;
     label: string;
@@ -390,6 +990,7 @@ export type LargeAnalysisOverview = {
 };
 
 export type SearchResultDoc = {
+  highlighted?: boolean;
   ordinal: number;
   name: string;
   title: string;
@@ -399,10 +1000,13 @@ export type SearchResultDoc = {
   formats: string[];
   tags: string[];
   topics?: string[];
+  /** Alternative names indexed for retrieval; never a replacement display title. */
+  search_aliases?: string[];
   quality_score?: number;
   timestamp?: string;
   notes?: string;
   context_note?: string;
+  alternatives?: LargeDatasetAlternative[];
   endpoint_host?: string;
   documentation_host?: string;
   access_model?: string;
@@ -416,8 +1020,14 @@ export type SearchResultDoc = {
   record_type?: string;
   source_tier?: string;
   source_adapter?: string;
+  source_surface?: string;
+  record_id?: string;
+  native_id?: string;
   confidence?: string;
   dcat_type?: string;
+  hydra_type?: string;
+  standard_term_ids?: string[];
+  standards_alignment?: LargeDataset['standards_alignment'];
   dcat_export_status?: string;
   openapi_type?: string;
   openapi_export_status?: string;
@@ -455,6 +1065,24 @@ export type SearchResultDoc = {
   official_full_text_match?: boolean;
 };
 
+export type LargeDatasetAlternative = {
+  record_id?: string;
+  title?: string;
+  route?: string;
+  source_surface?: string;
+  record_type?: string;
+  relationship_type?: 'alternative' | 'cross-source-alternative' | string;
+  similarity?: number;
+  shared_terms?: string[];
+  differences?: Array<{
+    field?: string;
+    selected?: unknown;
+    alternative?: unknown;
+  }>;
+  not_enough_evidence?: boolean;
+  [key: string]: unknown;
+};
+
 export type SearchSuggestion = {
   token: string;
   df: number;
@@ -465,6 +1093,7 @@ export type SearchSuggestion = {
 };
 
 export type LargeFacetRow = {
+  highlighted?: number;
   value: string;
   count: number;
 };
@@ -513,11 +1142,45 @@ export type LargeOperationalMetadataIndex = {
   records: Record<string, LargeDatasetOperationalMetadata>;
 };
 
+export type LargeRouteLink = {
+  route: string;
+  label?: string;
+  description?: string;
+};
+
+export type LargeRecordNarrative = {
+  title?: string;
+  /** Original Markdown location for resolving its relative references. */
+  source_url?: string;
+  /** Repository-authored Markdown rendered through Explorer's safe Markdown renderer. */
+  body: string;
+  process?: LargeRouteLink;
+  previous?: LargeRouteLink[];
+  next?: LargeRouteLink[];
+  variants?: LargeRouteLink[];
+  related?: LargeRouteLink[];
+};
+
+export type LargeSourceDisplayMode = 'link' | 'json' | 'xml' | 'text';
+
+export type LargeSourceAccess = {
+  url: string;
+  label: string;
+  media_type: string;
+  display_mode: LargeSourceDisplayMode;
+};
+
 export type LargeDataset = {
+  /** Optional retained OKF+ source metadata; validated before presentation. */
+  okf_plus?: unknown;
   id?: string;
   name: string;
   title: string;
   notes?: string;
+  context_note?: string;
+  alternatives?: LargeDatasetAlternative[];
+  /** Alternative names indexed for retrieval; never a replacement display title. */
+  search_aliases?: string[];
   publisher?: string;
   publisher_title?: string;
   resource_count?: number;
@@ -538,6 +1201,7 @@ export type LargeDataset = {
   resource_hosts?: string[];
   govuk_content_paths?: string[];
   source_api_url?: string;
+  narrative?: LargeRecordNarrative;
   concept_id?: string;
   route?: string;
   publisher_concept_id?: string;
@@ -556,6 +1220,8 @@ export type LargeDataset = {
   operational_metadata?: LargeDatasetOperationalMetadata;
   confidence?: string;
   dcat_type?: string;
+  hydra_type?: string;
+  standard_term_ids?: string[];
   dcat_export_status?: string;
   openapi_type?: string;
   openapi_export_status?: string;
@@ -564,6 +1230,12 @@ export type LargeDataset = {
     claim?: string;
     profiles?: string[];
     dcat?: {
+      term?: string;
+      export_status?: string;
+      required_missing?: string[];
+      properties?: string[];
+    };
+    hydra?: {
       term?: string;
       export_status?: string;
       required_missing?: string[];
@@ -620,6 +1292,8 @@ export type LargeResource = {
   provenance?: Record<string, unknown>;
   host?: string;
   url?: string;
+  /** Typed browser access contract. Link mode never fetches the response in Explorer. */
+  source_access?: LargeSourceAccess;
   resource_type?: string;
   position?: number;
   created?: string;
@@ -649,11 +1323,247 @@ export type LargePublisher = {
   [key: string]: unknown;
 };
 
+export type EndpointLabelAuthorityClass =
+  | 'source-native'
+  | 'domain-profile'
+  | 'editorial';
+
+export type LargeEndpointLabelAuthority = {
+  class: EndpointLabelAuthorityClass | string;
+  /** Evidence or governed profile that authorises the preferred label. */
+  source: string;
+};
+
+export type LargeEndpointLabelEntry = {
+  route: string;
+  /** Stable absolute semantic identity; route remains the local Explorer identity. */
+  iri: string;
+  label: string;
+  language: string;
+  type: string;
+  label_authority: LargeEndpointLabelAuthority;
+};
+
+export type LargeEndpointLabelIndex = {
+  schema: 'okf-explorer-endpoint-label-index.v1' | string;
+  snapshot: string;
+  generated_at?: string;
+  default_language: string;
+  /** Safe literal patterns; `*` is permitted only as the final character. */
+  opaque_identifier_patterns: string[];
+  entries: LargeEndpointLabelEntry[];
+  counts: {
+    entries: number;
+  };
+};
+
+export type LargeEndpointLabelRegistry = {
+  document: LargeEndpointLabelIndex;
+  byRoute: ReadonlyMap<string, LargeEndpointLabelEntry>;
+  opaqueIdentifierPatterns: readonly string[];
+};
+
 export type LargeRelationship = {
+  schema?: 'okf-relationship-assertion.v2' | string;
+  id?: string;
   source: string;
   target: string;
   kind: string;
+  label?: string;
+  source_iri?: string;
+  target_iri?: string;
+  predicate?: string;
+  inverse_label?: string;
+  assertion_status?: RelationshipAssertionStatus | string;
+  assertion_scope?: RelationshipAssertionScope | string;
+  authority?: FederationAuthority | RelationshipAuthorityClass | string;
+  authority_class?: RelationshipAuthorityClass | string;
+  derivation?: string;
+  derivation_activity?: string;
+  rule?: string;
+  supporting_assertions?: string[];
+  confidence?: string | number;
+  confidence_score?: number;
+  strength?: number;
+  count?: number;
+  observed_at?: string;
+  stale_after?: string;
+  freshness?: FederationFreshnessState | string;
+  evidence?: Array<string | Record<string, unknown>>;
+  rights?: string | Record<string, unknown>;
   [key: string]: unknown;
+};
+
+export type LargeRichRelationshipRuntimeChunk = {
+  path: string;
+  id: string;
+  media_type: 'application/json' | string;
+  content_encoding: 'gzip' | string;
+  bytes: number;
+  sha256: string;
+  count: number;
+  records?: number;
+};
+
+export type LargeRichRelationshipRuntimePlane = {
+  id: string;
+  name: string;
+  active: boolean;
+  lifecycle: 'active' | 'historical' | 'rejected' | string;
+  authority_classes: string[];
+  assertions: number;
+  chunks: LargeRichRelationshipRuntimeChunk[];
+};
+
+export type LargeRichRelationshipRuntimeManifest = {
+  '@id': string;
+  schema: 'okf-rich-relationship-runtime-manifest.v1' | string;
+  snapshot: string;
+  generated_at: string;
+  semantic_manifest: string;
+  assertion_contract: string;
+  row_contract: string;
+  default_planes: string[];
+  route_locator: {
+    path: string;
+    id: string;
+    routes: number;
+    buckets: number;
+    sha256: string;
+  };
+  planes: LargeRichRelationshipRuntimePlane[];
+  totals: {
+    active_assertions: number;
+    historical_assertions: number;
+    rejected_assertions: number;
+    all_assertions: number;
+    chunks: number;
+    [key: string]: number;
+  };
+  loading_policy: string;
+};
+
+export type LargeRichRelationshipRouteLocatorBucketMetadata = {
+  bucket: string;
+  path: string;
+  bytes: number;
+  sha256: string;
+  content_encoding: 'gzip' | string;
+  routes: number;
+  chunk_references: number;
+};
+
+export type LargeRichRelationshipRouteLocator = {
+  schema: 'okf-rich-relationship-route-locator.v1' | string;
+  generated_at: string;
+  hash_algorithm: 'sha256-utf8-first-byte-hex' | string;
+  bucket_path_template: string;
+  buckets: LargeRichRelationshipRouteLocatorBucketMetadata[];
+  counts: {
+    routes: number;
+    buckets: number;
+    chunk_references: number;
+  };
+};
+
+export type LargeRichRelationshipRouteLocatorBucket = {
+  schema: 'okf-rich-relationship-route-locator-bucket.v1' | string;
+  generated_at: string;
+  hash_algorithm: 'sha256-utf8-first-byte-hex' | string;
+  bucket: string;
+  routes: Array<{
+    route: string;
+    chunks: string[];
+    planes: Array<{
+      name: string;
+      assertions: number;
+      assertion_ids_sha256: string;
+      chunks: string[];
+    }>;
+  }>;
+  counts: {
+    routes: number;
+    chunk_references: number;
+  };
+};
+
+export type GovernedTermUsage = {
+  artifact: string;
+  occurrences: number;
+  samplePaths?: string[];
+};
+
+export type GovernedVocabulary = {
+  id: string;
+  title: string;
+  namespace: string;
+  prefix: string;
+  source: string;
+  version?: string;
+};
+
+export type GovernedTerm = {
+  id: string;
+  label: string;
+  iri: string;
+  kind: string;
+  definition: string;
+  application: string;
+  vocabulary: string;
+  status: string;
+  sourceLocator?: string;
+  helpKey?: string;
+  provenance: {
+    vocabulary: string;
+    resource: string;
+    version?: string;
+  };
+  validation: {
+    recognition: string;
+    meaning: string;
+    application: string;
+    method: string;
+    checkedBy: string;
+    checkedAt: string;
+  };
+  usage?: GovernedTermUsage[];
+};
+
+export type GovernedTermRegistry = {
+  schema: 'okf-explorer-governed-terms.v1' | string;
+  title: string;
+  description?: string;
+  snapshot?: string;
+  generated_at?: string;
+  review?: {
+    applicationStatus?: string;
+    checkedAt?: string;
+    checkedBy?: string;
+    liveLookupPerformed?: boolean;
+    method?: string;
+    scope?: string;
+  };
+  vocabularies: GovernedVocabulary[];
+  terms: GovernedTerm[];
+  counts?: Record<string, number>;
+};
+
+export type GovernedTermValidation = {
+  schema: 'okf-explorer-governed-term-validation.v1' | string;
+  snapshot?: string;
+  generated_at?: string;
+  status: string;
+  checkedAt?: string;
+  checkedBy?: string;
+  method?: string;
+  scope?: string;
+  liveLookupPerformed?: boolean;
+  checks: Record<string, string>;
+  counts?: Record<string, number>;
+  limitations?: string[];
+  unregisteredTerms?: string[];
+  unusedStandardsTerms?: string[];
+  pendingApplicationReviews?: string[];
 };
 
 export type LargeRelationshipsResult = {
@@ -669,6 +1579,23 @@ export type LargeRelationshipAdjacencyManifest = {
   snapshot?: string;
   buckets: Record<string, LargeResourceReference>;
   shards?: LargeShardMetadata[];
+};
+
+export type LargeRecordLocatorManifest = {
+  schema: 'okf-record-locator-sharded.v1' | string;
+  algorithm: 'fnv1a32-prefix-2' | string;
+  snapshot?: string;
+  records: number;
+  chunk_size: number;
+  record_chunks: LargeResourceReference[];
+  buckets: Record<string, LargeResourceReference>;
+  bucket_count?: number;
+  route_aliases?: Record<string, string>;
+  collisions?: Array<{
+    alias: string;
+    canonical_route: string;
+    record_id?: string;
+  }>;
 };
 
 export type LargeGraphIndex = {
@@ -703,6 +1630,7 @@ export type LargeFullIndex = {
   govukContent: LargeGovukContent;
   operationalMetadata: LargeOperationalMetadataIndex;
   datasetByName: Map<string, LargeDataset>;
+  datasetByRoute: Map<string, LargeDataset>;
   resourceById: Map<string, LargeResource>;
   publisherByName: Map<string, LargePublisher>;
   resourcesByDataset: Map<string, LargeResource[]>;
@@ -717,8 +1645,21 @@ export type LargeCorpusSource = {
   manifest: LargeDataManifest;
   overview: LargeOverview;
   analysis?: LargeAnalysisOverview;
+  presentation?: LargeExplorerPresentation;
+  endpointLabels?: LargeEndpointLabelRegistry;
+  termRegistry?: GovernedTermRegistry;
+  termValidation?: GovernedTermValidation;
+  providerDatapacks?: LargeProviderDatapackCollection;
+  effectsReconciliation?: LargeEffectsReconciliation;
+  effectsReconciliationError?: string;
+  modelEnrichment?: LargeModelEnrichmentState;
+  modelEnrichmentSnapshot: () => LargeModelEnrichmentState | undefined;
   releaseDataPlane?: LargeReleaseDataPlaneIndex;
   searchManifest?: LargeResourceReference;
+  loadContextAssembly?: () => Promise<import('./context/types').BoundContextSource>;
+  loadFacetIndex: () => Promise<Record<string, LargeFacetRow[]>>;
+  loadDatasetForRoute: (route: string, ordinal?: number) => Promise<LargeDataset | null>;
+  loadResourcesForRecord?: (route: string) => Promise<LargeResource[]>;
   loadFullIndex: () => Promise<LargeFullIndex>;
   loadRelationships: (maxRows?: number) => Promise<LargeRelationshipsResult>;
   loadRelationshipsForRoute: (route: string) => Promise<LargeRelationship[]>;
@@ -738,6 +1679,11 @@ export type BundleRegistryEntry = {
   status?: string;
   publisher?: string;
   license?: string;
+  repository_url?: string;
+  documentation_url?: string;
+  raw_subpath?: string;
+  release_archive_url?: string;
+  routes?: FederationAccessRoute[];
 };
 
 export type LoadedSource =
@@ -746,5 +1692,7 @@ export type LoadedSource =
       url: string;
       title: string;
       corpus: NormalizedCorpus;
+      federation?: FederationOverview;
+      loadContextAssembly?: () => Promise<import('./context/types').BoundContextSource>;
     }
   | LargeCorpusSource;

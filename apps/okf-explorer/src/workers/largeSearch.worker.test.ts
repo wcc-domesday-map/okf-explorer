@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LargeSearchManifest } from '$lib/types';
 import { canonicalJson, sha256Hex } from '$lib/sources/releaseDataPlane';
+import { QUERY_POLICY_SCHEMA, QUERY_POLICY_TOKENISER } from '$lib/search/queryPolicy';
+import { TYPO_TOLERANCE_CONTRACT } from '$lib/search/typoTolerance';
 import { makeRangePackFixture, rangeResponse } from '../test/rangePackFixture';
 
 type WorkerHarness = {
@@ -29,6 +31,63 @@ const baseManifest = (): LargeSearchManifest => ({
     sort_values: 'sort-values.json'
   }
 });
+
+const typoManifest = (): LargeSearchManifest => {
+  const manifest = baseManifest();
+  manifest.typo_tolerance = { ...TYPO_TOLERANCE_CONTRACT };
+  manifest.entrypoints.typo_deletions = { _: 'typos.json' };
+  manifest.counts.typo_deletion_shards = 1;
+  return manifest;
+};
+
+const queryPolicyManifest = (): LargeSearchManifest => {
+  const manifest = baseManifest();
+  manifest.result_limit = 4;
+  manifest.counts = { documents: 4, tokens: 9, max_postings_per_token: 100 };
+  manifest.query_policy = {
+    schema: QUERY_POLICY_SCHEMA,
+    tokeniser: QUERY_POLICY_TOKENISER,
+    stopwords: ['and', 'does', 'for', 'what'],
+    minimum_should_match: {
+      apply_from_query_tokens: 3,
+      minimum_matches: 2,
+      ratio_numerator: 3,
+      ratio_denominator: 10
+    }
+  };
+  manifest.entrypoints.lexicon = Object.fromEntries(
+    ['al', 'be', 'de', 'ds', 'ga', 'in', 'mi', 'pu', 'sc', 'te', 'un'].map(
+      (shard) => [shard, 'policy-lexicon.json']
+    )
+  );
+  manifest.entrypoints.postings = ['policy-postings.json'];
+  return manifest;
+};
+
+const queryPolicyPayloads: Array<[string, unknown]> = [
+  ['https://example.test/policy-lexicon.json', [
+    { token: 'alpha', df: 2, postings: 'policy-postings.json' },
+    { token: 'beta', df: 2, postings: 'policy-postings.json' },
+    { token: 'department', df: 2, postings: 'policy-postings.json' },
+    { token: 'delta', df: 1, postings: 'policy-postings.json' },
+    { token: 'dsit', df: 1, postings: 'policy-postings.json' },
+    { token: 'gamma', df: 1, postings: 'policy-postings.json' },
+    { token: 'innovation', df: 2, postings: 'policy-postings.json' },
+    { token: 'science', df: 2, postings: 'policy-postings.json' },
+    { token: 'technology', df: 2, postings: 'policy-postings.json' }
+  ]],
+  ['https://example.test/policy-postings.json', { tokens: {
+    alpha: [[0, 20, 1], [1, 16, 1]],
+    beta: [[0, 16, 1], [2, 12, 1]],
+    department: [[1, 16, 1], [3, 12, 1]],
+    delta: [[3, 8, 1]],
+    dsit: [[2, 16, 1]],
+    gamma: [[2, 8, 1]],
+    innovation: [[1, 16, 1], [3, 12, 1]],
+    science: [[1, 16, 1], [3, 12, 1]],
+    technology: [[1, 16, 1], [3, 12, 1]]
+  } }]
+];
 
 async function harness(manifest = baseManifest(), payloadOverrides: Array<[string, unknown]> = []) {
   const workerSelf: WorkerHarness = { postMessage: vi.fn() };
@@ -74,6 +133,52 @@ async function harness(manifest = baseManifest(), payloadOverrides: Array<[strin
 describe('large static search worker', () => {
   beforeEach(() => vi.unstubAllGlobals());
 
+  it('brings the complete highlighted set ahead of the result limit without reducing it', async () => {
+    const worker = await harness();
+    await worker.onmessage?.({ data: { type: 'query', id: 2, request: {
+      query: 'flood', filters: {}, sort: 'relevance', facet_keys: ['type', 'country'],
+      exploration: { preview: { type: ['Guide'] }, reductions: [] }
+    } } } as MessageEvent);
+    const response = worker.postMessage.mock.calls[0][0].response;
+    expect(response.total).toBe(4);
+    expect(response.results.map((row: { name: string }) => row.name)).toEqual(['flood-guide']);
+    expect(response.results[0].highlighted).toBe(true);
+    expect(response.exploration.scope_ids).toEqual([0, 1, 2, 3]);
+    expect(response.exploration.highlighted_ids).toEqual([3]);
+    expect(response.exploration.facets.type).toContainEqual({ value: 'Guide', count: 1, highlighted: 1 });
+  });
+
+  it('keeps the complement of a complete conjunction and reports current-scope facets without hydration', async () => {
+    const worker = await harness();
+    await worker.onmessage?.({ data: { type: 'query', id: 2, request: {
+      query: 'flood', filters: {}, sort: 'relevance', facet_keys: ['type'], include_results: false,
+      exploration: { preview: { country: ['England'] }, reductions: [
+        { mode: 'remove', selection: { type: ['API', 'Dataset'], country: ['England'] } }
+      ] }
+    } } } as MessageEvent);
+    const response = worker.postMessage.mock.calls[0][0].response;
+    expect(response.total).toBe(2);
+    expect(response.exploration.scope_ids).toEqual([1, 3]);
+    expect(response.exploration.highlighted_ids).toEqual([3]);
+    expect(response.exploration.facets.type).toContainEqual({ value: 'Dataset', count: 0, highlighted: 0 });
+    expect(vi.mocked(fetch).mock.calls.map(([input]) => String(input))).not.toContain('https://example.test/docs.json');
+  });
+
+  it('withholds fold membership for capped postings and refuses unsupported exploration facets', async () => {
+    const manifest = baseManifest(); manifest.counts.max_postings_per_token = 2;
+    const worker = await harness(manifest, [['https://example.test/postings.json', { tokens: { flood: [[0, 20, 1], [1, 16, 1]] } }]]);
+    await worker.onmessage?.({ data: { type: 'query', id: 2, request: {
+      query: 'flood', filters: {}, sort: 'relevance', exploration: { preview: { type: ['API'] }, reductions: [] }
+    } } } as MessageEvent);
+    const response = worker.postMessage.mock.calls[0][0].response;
+    expect(response.total_relation).toBe('gte');
+    expect(response.exploration.scope_ids).toBeUndefined();
+    await worker.onmessage?.({ data: { type: 'query', id: 3, request: {
+      query: 'flood', filters: {}, sort: 'relevance', exploration: { preview: { unavailable: ['x'] }, reductions: [] }
+    } } } as MessageEvent);
+    expect(worker.postMessage.mock.calls.at(-1)?.[0].type).toBe('error');
+  });
+
   it('applies OR-within and AND-across filters before the result limit and returns dynamic facets', async () => {
     const worker = await harness();
     await worker.onmessage?.({ data: {
@@ -106,6 +211,52 @@ describe('large static search worker', () => {
     expect(message.response.ignored_filters).toEqual({});
   });
 
+  it('loads exact facet distributions without hydrating result documents', async () => {
+    const worker = await harness();
+    await worker.onmessage?.({ data: {
+      type: 'query',
+      id: 2,
+      request: {
+        query: '',
+        filters: {},
+        sort: 'newest',
+        facet_keys: ['type'],
+        include_results: false
+      }
+    } } as MessageEvent);
+
+    const response = worker.postMessage.mock.calls[0][0].response;
+    expect(response.total).toBe(4);
+    expect(response.results).toEqual([]);
+    expect(response.facets.type).toEqual([
+      { value: 'API', count: 2 },
+      { value: 'Dataset', count: 1 },
+      { value: 'Guide', count: 1 }
+    ]);
+    expect(vi.mocked(fetch).mock.calls.map(([input]) => String(input))).not.toContain('https://example.test/docs.json');
+  });
+
+  it('does not claim an exact count-only result from capped postings', async () => {
+    const manifest = baseManifest();
+    manifest.counts.max_postings_per_token = 2;
+    const worker = await harness(manifest, [[
+      'https://example.test/postings.json',
+      { tokens: { flood: [[0, 20, 1], [1, 16, 1]] } }
+    ]]);
+    await worker.onmessage?.({ data: {
+      type: 'query',
+      id: 2,
+      request: { query: 'flood', filters: {}, sort: 'relevance', include_results: false }
+    } } as MessageEvent);
+
+    const response = worker.postMessage.mock.calls[0][0].response;
+    expect(response.total).toBe(2);
+    expect(response.total_relation).toBe('gte');
+    expect(response.truncated).toBe(true);
+    expect(response.truncations).toEqual([{ reason: 'capped-postings' }]);
+    expect(vi.mocked(fetch).mock.calls.map(([input]) => String(input))).not.toContain('https://example.test/docs.json');
+  });
+
   it('ignores invalid indexed values while retaining valid selections', async () => {
     const worker = await harness();
     await worker.onmessage?.({ data: {
@@ -125,7 +276,7 @@ describe('large static search worker', () => {
     expect(response.ignored_filters).toEqual({ type: ['retired-value'] });
   });
 
-  it('suppresses dynamic facets when an active filter needs full-index fallback', async () => {
+  it.each([undefined, { preview: {}, reductions: [] }])('preserves fallback and suppresses partial facets with exploration %j', async (exploration) => {
     const worker = await harness();
     await worker.onmessage?.({ data: {
       type: 'query',
@@ -134,7 +285,8 @@ describe('large static search worker', () => {
         query: 'flood',
         filters: { type: ['API'], unindexed: ['current'] },
         sort: 'relevance',
-        facet_keys: ['type']
+        facet_keys: ['type'],
+        exploration
       }
     } } as MessageEvent);
 
@@ -143,6 +295,7 @@ describe('large static search worker', () => {
     expect(response.filters_applied).toBe(false);
     expect(response.facets).toEqual({});
     expect(response.ignored_filters).toEqual({});
+    expect(response.exploration).toBeUndefined();
   });
 
   it('applies filters and returns empty dynamic facets for a lexical no-match', async () => {
@@ -165,6 +318,468 @@ describe('large static search worker', () => {
     expect(response.facets).toEqual({ type: [] });
   });
 
+  it('requires every meaningful query token instead of falling back to partial OR matches', async () => {
+    const worker = await harness();
+    await worker.onmessage?.({ data: {
+      type: 'query',
+      id: 2,
+      request: { query: 'world flood', filters: {}, sort: 'relevance' }
+    } } as MessageEvent);
+
+    const response = worker.postMessage.mock.calls[0][0].response;
+    expect(response.total).toBe(0);
+    expect(response.results).toEqual([]);
+    expect(response.unresolved_tokens).toEqual(['world']);
+  });
+
+  it('applies a declared producer minimum-should-match policy to distinct token groups', async () => {
+    const worker = await harness(queryPolicyManifest(), queryPolicyPayloads);
+    await worker.onmessage?.({ data: {
+      type: 'query',
+      id: 2,
+      request: {
+        query: 'What alpha beta gamma delta missing',
+        filters: {},
+        sort: 'relevance'
+      }
+    } } as MessageEvent);
+
+    const response = worker.postMessage.mock.calls[0][0].response;
+    expect(response.results.map((row: { ordinal: number }) => row.ordinal)).toEqual([0, 2]);
+    expect(response.total).toBe(2);
+    expect(response.unresolved_tokens).toEqual(['missing']);
+    expect(response.query_policy).toEqual({
+      schema: 'okf-search-query-policy-result.v1',
+      mode: 'minimum-should-match',
+      tokeniser: QUERY_POLICY_TOKENISER,
+      query_token_count: 5,
+      resolved_token_group_count: 4,
+      required_token_group_count: 2,
+      unresolved_token_group_count: 1
+    });
+  });
+
+  it('counts unresolved groups as unmatched instead of reducing the policy denominator', async () => {
+    const worker = await harness(queryPolicyManifest(), queryPolicyPayloads);
+    await worker.onmessage?.({ data: {
+      type: 'query',
+      id: 2,
+      request: { query: 'alpha missing unknown', filters: {}, sort: 'relevance' }
+    } } as MessageEvent);
+
+    const response = worker.postMessage.mock.calls[0][0].response;
+    expect(response.total).toBe(0);
+    expect(response.results).toEqual([]);
+    expect(response.unresolved_tokens).toEqual(['missing', 'unknown']);
+    expect(response.query_policy).toMatchObject({
+      query_token_count: 3,
+      resolved_token_group_count: 1,
+      required_token_group_count: 2,
+      unresolved_token_group_count: 2
+    });
+  });
+
+  it('preserves an exact governed entity alias as one resolved semantic group', async () => {
+    const worker = await harness(queryPolicyManifest(), queryPolicyPayloads);
+    await worker.onmessage?.({ data: {
+      type: 'query',
+      id: 2,
+      request: { query: 'DSIT', filters: {}, sort: 'relevance' }
+    } } as MessageEvent);
+
+    const response = worker.postMessage.mock.calls[0][0].response;
+    expect(response.results.map((row: { ordinal: number }) => row.ordinal)).toEqual([1, 3]);
+    expect(response.interpreted_entity).toMatchObject({
+      label: 'Department for Science Innovation and Technology',
+      matched_alias: 'DSIT'
+    });
+    expect(response.unresolved_tokens).toBeUndefined();
+    expect(response.query_policy).toMatchObject({
+      query_token_count: 1,
+      resolved_token_group_count: 1,
+      required_token_group_count: 1,
+      unresolved_token_group_count: 0
+    });
+  });
+
+  it('falls back to truthful lexical grouping when an exact entity alias has no ordinal source', async () => {
+    const manifest = queryPolicyManifest();
+    manifest.entrypoints.entities = 'policy-entities.json';
+    const worker = await harness(manifest, [
+      ...queryPolicyPayloads,
+      ['https://example.test/policy-entities.json', {
+        schema: 'okf-static-search-entities.v1',
+        entities: [{
+          id: 'organisation/dsit',
+          label: 'Department for Science Innovation and Technology',
+          kind: 'organisation',
+          filter_key: 'organisation',
+          filter_value: 'dsit',
+          aliases: ['DSIT']
+        }]
+      }]
+    ]);
+    await worker.onmessage?.({ data: {
+      type: 'query',
+      id: 2,
+      request: { query: 'DSIT', filters: {}, sort: 'relevance' }
+    } } as MessageEvent);
+
+    const response = worker.postMessage.mock.calls[0][0].response;
+    expect(response.results.map((row: { ordinal: number }) => row.ordinal)).toEqual([2]);
+    expect(response.interpreted_entity).toMatchObject({
+      label: 'Department for Science Innovation and Technology',
+      matched_alias: 'DSIT'
+    });
+    expect(response.unresolved_tokens).toBeUndefined();
+    expect(response.query_policy).toMatchObject({
+      query_token_count: 1,
+      resolved_token_group_count: 1,
+      required_token_group_count: 1,
+      unresolved_token_group_count: 0
+    });
+  });
+
+  it('retains component counts for an exact multi-token governed entity label', async () => {
+    const worker = await harness(queryPolicyManifest(), queryPolicyPayloads);
+    await worker.onmessage?.({ data: {
+      type: 'query',
+      id: 2,
+      request: {
+        query: 'Department for Science Innovation and Technology',
+        filters: {},
+        sort: 'relevance'
+      }
+    } } as MessageEvent);
+
+    const response = worker.postMessage.mock.calls[0][0].response;
+    expect(response.results.map((row: { ordinal: number }) => row.ordinal)).toEqual([1, 3]);
+    expect(response.query_policy).toMatchObject({
+      query_token_count: 4,
+      resolved_token_group_count: 4,
+      required_token_group_count: 2,
+      unresolved_token_group_count: 0
+    });
+  });
+
+  it('accounts for every raw policy token in embedded entity prose before intersecting the entity', async () => {
+    const worker = await harness(queryPolicyManifest(), queryPolicyPayloads);
+    await worker.onmessage?.({ data: {
+      type: 'query',
+      id: 2,
+      request: {
+        query: 'What does Department for Science Innovation and Technology publish missing',
+        filters: {},
+        sort: 'relevance'
+      }
+    } } as MessageEvent);
+
+    const response = worker.postMessage.mock.calls[0][0].response;
+    expect(response.results.map((row: { ordinal: number }) => row.ordinal)).toEqual([1, 3]);
+    expect(response.unresolved_tokens).toEqual(['publish', 'missing']);
+    expect(response.query_policy).toMatchObject({
+      query_token_count: 6,
+      resolved_token_group_count: 4,
+      required_token_group_count: 2,
+      unresolved_token_group_count: 2
+    });
+  });
+
+  it('keeps the declared below-threshold OR bounded by distinct query groups', async () => {
+    const worker = await harness(queryPolicyManifest(), queryPolicyPayloads);
+    await worker.onmessage?.({ data: {
+      type: 'query',
+      id: 2,
+      request: { query: 'alpha.delta', filters: {}, sort: 'relevance' }
+    } } as MessageEvent);
+
+    const response = worker.postMessage.mock.calls[0][0].response;
+    expect(response.total).toBe(3);
+    expect(response.results.map((row: { ordinal: number }) => row.ordinal)).toEqual([0, 1, 3]);
+    expect(response.query_policy).toMatchObject({
+      query_token_count: 2,
+      required_token_group_count: 1,
+      unresolved_token_group_count: 0
+    });
+  });
+
+  it('composes policy grouping with bounded typo correction without leaking legacy strict-AND anchoring', async () => {
+    const manifest = queryPolicyManifest();
+    manifest.typo_tolerance = { ...TYPO_TOLERANCE_CONTRACT };
+    manifest.entrypoints.typo_deletions = { _: 'policy-typos.json' };
+    manifest.counts.typo_deletion_shards = 1;
+    const worker = await harness(manifest, [
+      ...queryPolicyPayloads,
+      ['https://example.test/policy-typos.json', {
+        schema: 'okf-search-typo-deletions.v1',
+        keys: { beeta: [{ token: 'beta', df: 2 }] }
+      }]
+    ]);
+    await worker.onmessage?.({ data: {
+      type: 'query',
+      id: 2,
+      request: { query: 'alpha delta beeta', filters: {}, sort: 'relevance' }
+    } } as MessageEvent);
+
+    const response = worker.postMessage.mock.calls[0][0].response;
+    expect(response.results.map((row: { ordinal: number }) => row.ordinal)).toEqual([0]);
+    expect(response.query_corrections).toEqual([
+      expect.objectContaining({ query_token: 'beeta', matched_token: 'beta' })
+    ]);
+    expect(response.query_policy).toMatchObject({
+      query_token_count: 3,
+      resolved_token_group_count: 3,
+      required_token_group_count: 2,
+      unresolved_token_group_count: 0
+    });
+  });
+
+  it('preserves strict AND for a producer that does not opt in to query_policy', async () => {
+    const manifest = queryPolicyManifest();
+    delete manifest.query_policy;
+    const worker = await harness(manifest, queryPolicyPayloads);
+    await worker.onmessage?.({ data: {
+      type: 'query',
+      id: 2,
+      request: { query: 'alpha beta', filters: {}, sort: 'relevance' }
+    } } as MessageEvent);
+
+    const response = worker.postMessage.mock.calls[0][0].response;
+    expect(response.total).toBe(1);
+    expect(response.results[0].ordinal).toBe(0);
+    expect(response.query_policy).toBeUndefined();
+  });
+
+  it('recovers a manifest-declared one-edit misspelling and explains each contributing match', async () => {
+    const manifest = typoManifest();
+    manifest.counts.tokens = 2;
+    manifest.entrypoints.lexicon.co = 'coventry-lexicon.json';
+    manifest.entrypoints.prefixes.co = 'coventry-prefixes.json';
+    manifest.entrypoints.postings.push('coventry-postings.json');
+    const worker = await harness(manifest, [
+      ['https://example.test/typos.json', {
+        schema: 'okf-search-typo-deletions.v1',
+        keys: { covetry: [{ token: 'coventry', df: 1 }] }
+      }],
+      ['https://example.test/coventry-lexicon.json', [
+        { token: 'coventry', df: 1, postings: 'coventry-postings.json' }
+      ]],
+      // The legacy short-prefix fallback can already surface Coventry for
+      // "covnetry". The declared typo index takes precedence so the match is
+      // verified and explainable instead of looking like an opaque prefix hit.
+      ['https://example.test/coventry-prefixes.json', {
+        cov: [{ token: 'coventry', label: 'Coventry', query: 'coventry', df: 1 }]
+      }],
+      ['https://example.test/coventry-postings.json', { tokens: { coventry: [[0, 30, 1]] } }],
+      ['https://example.test/docs.json', [
+        { ordinal: 0, name: 'coventry-cathedral', title: 'Coventry Cathedral', publisher: 'he', publisher_title: 'Historic England', resource_count: 1, formats: [], tags: [], open: 'asset/coventry-cathedral' }
+      ]]
+    ]);
+    await worker.onmessage?.({ data: {
+      type: 'query',
+      id: 2,
+      request: { query: 'Covnetry', filters: {}, sort: 'relevance', ranking: 'idf-exact' }
+    } } as MessageEvent);
+
+    const response = worker.postMessage.mock.calls[0][0].response;
+    const correction = {
+      query_token: 'covnetry',
+      matched_token: 'coventry',
+      edit_distance: 1,
+      method: 'symmetric-delete-damerau-levenshtein-v1',
+      candidate_rank: 1
+    };
+    expect(response.total).toBe(1);
+    expect(response.results[0].name).toBe('coventry-cathedral');
+    expect(response.query_corrections).toEqual([correction]);
+    expect(response.results[0].match).toMatchObject({
+      query_tokens: ['covnetry'],
+      matched_fields: ['title'],
+      corrected_tokens: [correction]
+    });
+    // Exact-document boosting remains tied to the actual query, not the
+    // rewritten token, so correction cannot impersonate an exact phrase hit.
+    expect(response.results[0].match.score_components.exact).toBe(0);
+  });
+
+  it('accepts a typo only when it co-occurs with resolved query terms', async () => {
+    const manifest = typoManifest();
+    manifest.counts = { documents: 3, tokens: 4, max_postings_per_token: 100, typo_deletion_shards: 1 };
+    manifest.entrypoints.lexicon = {
+      ba: 'name-lexicon.json', ca: 'name-lexicon.json', co: 'name-lexicon.json', sp: 'name-lexicon.json'
+    };
+    manifest.entrypoints.postings = ['name-postings.json'];
+    manifest.entrypoints.result_docs = ['name-docs.json'];
+    const worker = await harness(manifest, [
+      ['https://example.test/name-lexicon.json', [
+        { token: 'basin', df: 1, postings: 'name-postings.json' },
+        { token: 'cathedral', df: 1, postings: 'name-postings.json' },
+        { token: 'coventry', df: 1, postings: 'name-postings.json' },
+        { token: 'spencer', df: 1, postings: 'name-postings.json' }
+      ]],
+      ['https://example.test/name-postings.json', { tokens: {
+        basin: [[1, 16, 1]],
+        cathedral: [[0, 16, 1]],
+        coventry: [[0, 16, 1]],
+        spencer: [[2, 16, 1]]
+      } }],
+      ['https://example.test/typos.json', {
+        schema: 'okf-search-typo-deletions.v1',
+        keys: {
+          basi: [{ token: 'basin', df: 1 }],
+          spence: [{ token: 'spencer', df: 1 }],
+          coventry: [{ token: 'coventry', df: 1 }]
+        }
+      }],
+      ['https://example.test/name-docs.json', [
+        { ordinal: 0, name: 'coventry-cathedral', title: 'Coventry Cathedral', publisher: 'he', publisher_title: 'Historic England', resource_count: 1, formats: [], tags: [], open: 'asset/coventry-cathedral' },
+        { ordinal: 1, name: 'canal-basin', title: 'Canal Basin', publisher: 'he', publisher_title: 'Historic England', resource_count: 1, formats: [], tags: [], open: 'asset/canal-basin' },
+        { ordinal: 2, name: 'spencer-hall', title: 'Spencer Hall', publisher: 'he', publisher_title: 'Historic England', resource_count: 1, formats: [], tags: [], open: 'asset/spencer-hall' }
+      ]]
+    ]);
+
+    await worker.onmessage?.({ data: {
+      type: 'query', id: 2, request: { query: 'Basil Spence Cathedral', filters: {}, sort: 'relevance' }
+    } } as MessageEvent);
+    const rejected = worker.postMessage.mock.calls[0][0].response;
+    expect(rejected.total).toBe(0);
+    expect(rejected.query_corrections).toBeUndefined();
+    expect(rejected.unresolved_tokens).toEqual(['basil', 'spence']);
+
+    worker.postMessage.mockClear();
+    await worker.onmessage?.({ data: {
+      type: 'query', id: 3, request: { query: 'Coventtry Cathedral', filters: {}, sort: 'relevance' }
+    } } as MessageEvent);
+    const accepted = worker.postMessage.mock.calls[0][0].response;
+    expect(accepted.total).toBe(1);
+    expect(accepted.results[0].name).toBe('coventry-cathedral');
+    expect(accepted.query_corrections).toEqual([
+      expect.objectContaining({ query_token: 'coventtry', matched_token: 'coventry' })
+    ]);
+    expect(accepted.unresolved_tokens).toBeUndefined();
+  });
+
+  it('searches declared record aliases without replacing the canonical result title', async () => {
+    const manifest = baseManifest();
+    manifest.weights.search_aliases = 12;
+    manifest.field_masks.search_aliases = 2048;
+    manifest.entrypoints.lexicon.gr = 'greyfriars-lexicon.json';
+    manifest.entrypoints.postings.push('greyfriars-postings.json');
+    const worker = await harness(manifest, [
+      ['https://example.test/greyfriars-lexicon.json', [
+        { token: 'greyfriars', df: 1, postings: 'greyfriars-postings.json' }
+      ]],
+      ['https://example.test/greyfriars-postings.json', { tokens: { greyfriars: [[0, 12, 2048]] } }],
+      ['https://example.test/docs.json', [
+        {
+          ordinal: 0,
+          name: 'coventry-cathedral',
+          title: 'Coventry Cathedral',
+          search_aliases: ['Greyfriars'],
+          publisher: 'he',
+          publisher_title: 'Historic England',
+          resource_count: 1,
+          formats: [],
+          tags: [],
+          open: 'asset/coventry-cathedral'
+        }
+      ]]
+    ]);
+    await worker.onmessage?.({ data: {
+      type: 'query',
+      id: 2,
+      request: { query: 'Greyfriars', filters: {}, sort: 'relevance', ranking: 'idf-exact' }
+    } } as MessageEvent);
+
+    const response = worker.postMessage.mock.calls[0][0].response;
+    expect(response.total).toBe(1);
+    expect(response.results[0]).toMatchObject({
+      title: 'Coventry Cathedral',
+      search_aliases: ['Greyfriars'],
+      match: { matched_fields: ['search_aliases'] }
+    });
+    expect(response.results[0].match.score_components.exact).toBe(0);
+  });
+
+  it('keeps exact and prefix lookup ahead of typo correction', async () => {
+    const manifest = typoManifest();
+    manifest.entrypoints.prefixes.fl = 'prefixes.json';
+    const worker = await harness(manifest, [
+      ['https://example.test/prefixes.json', {
+        floo: [{ token: 'flood', label: 'flood', query: 'flood', df: 4 }]
+      }],
+      ['https://example.test/typos.json', {
+        schema: 'okf-search-typo-deletions.v1',
+        keys: { floo: [{ token: 'floor', df: 1 }] }
+      }]
+    ]);
+
+    await worker.onmessage?.({ data: {
+      type: 'query', id: 2, request: { query: 'flood', filters: {}, sort: 'relevance' }
+    } } as MessageEvent);
+    expect(worker.postMessage.mock.calls[0][0].response.query_corrections).toBeUndefined();
+    expect(vi.mocked(fetch).mock.calls.map(([input]) => String(input))).not.toContain('https://example.test/typos.json');
+
+    worker.postMessage.mockClear();
+    await worker.onmessage?.({ data: {
+      type: 'query', id: 3, request: { query: 'floo', filters: {}, sort: 'relevance' }
+    } } as MessageEvent);
+    expect(worker.postMessage.mock.calls[0][0].response.total).toBe(4);
+    expect(worker.postMessage.mock.calls[0][0].response.query_corrections).toBeUndefined();
+    expect(vi.mocked(fetch).mock.calls.map(([input]) => String(input))).not.toContain('https://example.test/typos.json');
+  });
+
+  it('keeps a unique entity alias ahead of typo correction', async () => {
+    const worker = await harness(typoManifest());
+    await worker.onmessage?.({ data: {
+      type: 'query', id: 2, request: { query: 'DSIT', filters: {}, sort: 'relevance' }
+    } } as MessageEvent);
+
+    const response = worker.postMessage.mock.calls[0][0].response;
+    expect(response.interpreted_entity).toMatchObject({
+      label: 'Department for Science Innovation and Technology',
+      matched_alias: 'DSIT'
+    });
+    expect(response.query_corrections).toBeUndefined();
+    expect(vi.mocked(fetch).mock.calls.map(([input]) => String(input))).not.toContain('https://example.test/typos.json');
+  });
+
+  it('bounds missing-token correction and reports when the query budget is reached', async () => {
+    const worker = await harness(typoManifest(), [[
+      'https://example.test/typos.json',
+      { schema: 'okf-search-typo-deletions.v1', keys: {} }
+    ]]);
+    await worker.onmessage?.({ data: {
+      type: 'query',
+      id: 2,
+      request: { query: 'aaaa bbbb cccc dddd eeee', filters: {}, sort: 'relevance' }
+    } } as MessageEvent);
+
+    const response = worker.postMessage.mock.calls[0][0].response;
+    expect(response.total).toBe(0);
+    expect(response.correction_truncated).toBe(true);
+    expect(vi.mocked(fetch).mock.calls.filter(([input]) => String(input) === 'https://example.test/typos.json')).toHaveLength(1);
+  });
+
+  it('rejects a typo shard that advertises unbounded candidate expansion', async () => {
+    const candidates = Array.from(
+      { length: TYPO_TOLERANCE_CONTRACT.max_candidates_per_delete_key + 1 },
+      (_value, index) => ({ token: `candidate${index}`, df: 1 })
+    );
+    const worker = await harness(typoManifest(), [[
+      'https://example.test/typos.json',
+      { schema: 'okf-search-typo-deletions.v1', keys: { zzzz: candidates } }
+    ]]);
+    await worker.onmessage?.({ data: {
+      type: 'query', id: 2, request: { query: 'zzzz', filters: {}, sort: 'relevance' }
+    } } as MessageEvent);
+
+    expect(worker.postMessage.mock.calls[0][0]).toMatchObject({
+      type: 'error',
+      error: expect.stringContaining('candidate expansion')
+    });
+  });
+
   it('does not interpret a non-empty stop-word-only query as match-all browsing', async () => {
     const worker = await harness();
     await worker.onmessage?.({ data: {
@@ -179,7 +794,7 @@ describe('large static search worker', () => {
     expect(response.total_relation).toBe('eq');
   });
 
-  it('reports that v1 manifests need the full-index filter fallback', async () => {
+  it.each([undefined, { preview: {}, reductions: [] }])('preserves v1 fallback with exploration %j', async (exploration) => {
     const manifest = baseManifest();
     manifest.schema = 'okf-static-search.v1';
     delete manifest.entrypoints.filter_postings;
@@ -188,7 +803,7 @@ describe('large static search worker', () => {
     await worker.onmessage?.({ data: {
       type: 'query',
       id: 2,
-      request: { query: 'flood', filters: { type: ['API'] }, sort: 'relevance', ranking: 'weighted' }
+      request: { query: 'flood', filters: { type: ['API'] }, sort: 'relevance', ranking: 'weighted', exploration }
     } } as MessageEvent);
 
     const response = worker.postMessage.mock.calls[0][0].response;
@@ -325,6 +940,126 @@ describe('large static search worker', () => {
     expect(response.total).toBe(2);
     expect(response.results[0].match.matched_fields).toContain('publisher');
     expect(response.results[0].match.score_components.entity).toBeGreaterThan(0);
+  });
+
+  it('recognises one unambiguous organisation embedded in a natural-language question', async () => {
+    const manifest = baseManifest();
+    manifest.schema = 'gov-ckan-static-search.v1';
+    delete manifest.entrypoints.filter_postings;
+    delete manifest.entrypoints.sort_values;
+    const worker = await harness(manifest);
+    await worker.onmessage?.({ data: {
+      type: 'query',
+      id: 2,
+      request: {
+        query: 'What does Home Office cover?',
+        filters: {},
+        sort: 'relevance',
+        ranking: 'weighted'
+      }
+    } } as MessageEvent);
+
+    const response = worker.postMessage.mock.calls[0][0].response;
+    expect(response.interpreted_entity).toMatchObject({
+      label: 'Home Office',
+      kind: 'organisation',
+      filter_value: 'home-office'
+    });
+    expect(response.total).toBe(2);
+    expect(response.results[0].match.matched_fields).toContain('publisher');
+  });
+
+  it('intersects an embedded organisation with a known residual topic', async () => {
+    const manifest = baseManifest();
+    manifest.schema = 'gov-ckan-static-search.v1';
+    delete manifest.entrypoints.filter_postings;
+    delete manifest.entrypoints.sort_values;
+    const worker = await harness(manifest);
+    await worker.onmessage?.({ data: {
+      type: 'query', id: 2, request: { query: 'Home Office flood', filters: {}, sort: 'relevance', ranking: 'weighted' }
+    } } as MessageEvent);
+
+    const response = worker.postMessage.mock.calls[0][0].response;
+    expect(response.interpreted_entity.label).toBe('Home Office');
+    expect(response.total).toBe(2);
+    expect(response.results[0].match.query_tokens).toEqual(['home', 'office', 'flood']);
+  });
+
+  it('retains capped-posting uncertainty when an entity narrows one residual group', async () => {
+    const manifest = baseManifest();
+    manifest.schema = 'gov-ckan-static-search.v1';
+    manifest.result_limit = 4;
+    manifest.counts.max_postings_per_token = 2;
+    delete manifest.entrypoints.filter_postings;
+    delete manifest.entrypoints.sort_values;
+    const worker = await harness(manifest, [[
+      'https://example.test/postings.json',
+      { tokens: { flood: [[0, 20, 1]] } }
+    ]]);
+    await worker.onmessage?.({ data: {
+      type: 'query', id: 2, request: { query: 'Home Office flood', filters: {}, sort: 'relevance', ranking: 'weighted' }
+    } } as MessageEvent);
+
+    const response = worker.postMessage.mock.calls[0][0].response;
+    expect(response.interpreted_entity.label).toBe('Home Office');
+    expect(response.total).toBe(1);
+    expect(response.total_relation).toBe('gte');
+    expect(response.truncations).toContainEqual({ reason: 'capped-postings' });
+  });
+
+  it('reports unknown totals for an entity plus mixed complete and capped residual groups', async () => {
+    const manifest = baseManifest();
+    manifest.schema = 'gov-ckan-static-search.v1';
+    manifest.result_limit = 4;
+    manifest.counts.max_postings_per_token = 2;
+    manifest.entrypoints.lexicon = { fl: 'lexicon.json', ri: 'risk-lexicon.json' };
+    manifest.entrypoints.postings = ['postings.json', 'risk-postings.json'];
+    delete manifest.entrypoints.filter_postings;
+    delete manifest.entrypoints.sort_values;
+    const worker = await harness(manifest, [
+      ['https://example.test/postings.json', { tokens: { flood: [[0, 20, 1]] } }],
+      ['https://example.test/risk-lexicon.json', [{ token: 'risk', df: 2, postings: 'risk-postings.json' }]],
+      ['https://example.test/risk-postings.json', { tokens: { risk: [[0, 12, 1], [2, 10, 1]] } }]
+    ]);
+    await worker.onmessage?.({ data: {
+      type: 'query', id: 2, request: { query: 'Home Office flood risk', filters: {}, sort: 'relevance', ranking: 'weighted' }
+    } } as MessageEvent);
+
+    const response = worker.postMessage.mock.calls[0][0].response;
+    expect(response.interpreted_entity.label).toBe('Home Office');
+    expect(response.total).toBe(2);
+    expect(response.total_relation).toBe('unknown');
+    expect(response.truncations).toContainEqual({ reason: 'capped-postings' });
+  });
+
+  it('returns no results for an embedded organisation with an unresolved residual topic', async () => {
+    const manifest = baseManifest();
+    manifest.schema = 'gov-ckan-static-search.v1';
+    delete manifest.entrypoints.filter_postings;
+    delete manifest.entrypoints.sort_values;
+    const worker = await harness(manifest);
+    await worker.onmessage?.({ data: {
+      type: 'query', id: 2, request: { query: 'Home Office passports', filters: {}, sort: 'relevance', ranking: 'weighted' }
+    } } as MessageEvent);
+
+    const response = worker.postMessage.mock.calls[0][0].response;
+    expect(response.interpreted_entity.label).toBe('Home Office');
+    expect(response.total).toBe(0);
+    expect(response.unresolved_tokens).toEqual(['passports']);
+  });
+
+  it('does not recognise a short inferred alias embedded in stop-word prose', async () => {
+    const worker = await harness(baseManifest(), [[
+      'https://example.test/facets.json',
+      { publisher: { 'information-technology': [0, 2] } }
+    ]]);
+    await worker.onmessage?.({ data: {
+      type: 'query', id: 2, request: { query: 'what is it', filters: {}, sort: 'relevance', ranking: 'weighted' }
+    } } as MessageEvent);
+
+    const response = worker.postMessage.mock.calls[0][0].response;
+    expect(response.interpreted_entity).toBeUndefined();
+    expect(response.total).toBe(0);
   });
 
   it('resolves an unambiguous organisation initialism without a lexical token', async () => {
@@ -613,5 +1348,17 @@ describe('large static search worker', () => {
       error: expect.stringContaining('integrity check failed')
     });
     expect(postingsFetches).toHaveLength(2);
+  });
+});
+
+it('rejects active exploration when a legacy filter cannot be evaluated', async () => {
+  const worker = await harness();
+  await worker.onmessage?.({ data: {
+    type: 'query', id: 2,
+    request: { query: 'flood', filters: { unindexed: ['current'] }, sort: 'relevance',
+      exploration: { preview: { type: ['API'] }, reductions: [] } }
+  } } as MessageEvent);
+  expect(worker.postMessage.mock.calls[0][0]).toMatchObject({
+    type: 'error', error: expect.stringContaining('cannot evaluate every selected facet')
   });
 });

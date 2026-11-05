@@ -9,7 +9,9 @@ import {
   analysisNodeForRoute,
   colorForType,
   datasetDateContext,
+  datasetDisplaySeries,
   datasetOperationalContext,
+  datasetReleasePeriod,
   displayValue,
   facetLabel,
   facetSummary,
@@ -18,6 +20,7 @@ import {
   isHttpUrl,
   orderedFacetKeys,
   relatedSeriesDatasets,
+  relatedDisplaySeriesDatasets,
   relationshipTitle,
   routeForAnalysisNode,
   selectedFacetValueSummary,
@@ -89,10 +92,22 @@ describe('viewer helpers', () => {
     expect(formatPercent(0.955)).toBe('96%');
     expect(formatPercent(undefined)).toBe('n/a');
     expect(formatPercent(Number.NaN)).toBe('n/a');
+    expect(formatPercent(-0.1)).toBe('n/a');
+    expect(formatPercent(1.1)).toBe('n/a');
     expect(facetLabel('publisher_family')).toBe('publisher family');
     expect(isHttpUrl('https://example.test')).toBe(true);
     expect(isHttpUrl('HTTP://example.test')).toBe(true);
     expect(isHttpUrl('javascript:alert(1)')).toBe(false);
+    expect(isHttpUrl('https://user:secret@example.test')).toBe(false);
+    expect(isHttpUrl(' https://example.test')).toBe(false);
+    expect(isHttpUrl('https://example.test/?q=rows:100 "api"')).toBe(false);
+    expect(isHttpUrl('https://example.test/?q=rows%3A100%20%22api%22')).toBe(true);
+    expect(isHttpUrl('https:///missing-host')).toBe(false);
+    expect(isHttpUrl('https://?q=missing-host')).toBe(false);
+    expect(isHttpUrl('https://example.test:0/source')).toBe(false);
+    expect(isHttpUrl('https://example.test:65536/source')).toBe(false);
+    expect(isHttpUrl('https://example.test:65535/source')).toBe(true);
+    expect(isHttpUrl('https://[2001:db8::1]:443/source')).toBe(true);
     expect(isHttpUrl(42)).toBe(false);
   });
 
@@ -138,6 +153,18 @@ describe('viewer helpers', () => {
     expect(analysisFacetRows(withUnknownTier).map((facet) => facet.key)).toEqual(['advanced', 'suppressed']);
   });
 
+  it('honours explicit provider pinning, order and priority before quality fallbacks', () => {
+    const configured: LargeAnalysisOverview = {
+      ...analysis,
+      display: { facets: { order: ['tag', 'publisher'], pinned: ['publisher'] } },
+      facet_analysis: [
+        { ...analysis.facet_analysis![0], display_priority: 1 },
+        { ...analysis.facet_analysis![1], display_priority: 99 }
+      ]
+    };
+    expect(analysisFacetRows(configured).map((facet) => facet.key)).toEqual(['publisher', 'tag']);
+  });
+
   it('builds fallback facets from overview previews', () => {
     const rows = analysisFacetRows(undefined, { format: [{ value: 'CSV', count: 3 }], empty: [] });
     expect(rows).toEqual([
@@ -158,6 +185,10 @@ describe('viewer helpers', () => {
 
   it('resolves analysis routes from graph nodes, facet routes and hierarchies', () => {
     expect(routeForAnalysisNode('facet/tag/IAPT')).toEqual({ key: 'tag', value: 'IAPT' });
+    expect(routeForAnalysisNode('facet/topic/Business%20%26%20economy')).toEqual({
+      key: 'topic',
+      value: 'Business & economy'
+    });
     expect(routeForAnalysisNode('facet/tag')).toBeNull();
     expect(routeForAnalysisNode('dataset/example')).toBeNull();
     expect(analysisNodeForRoute(analysis, 'facet/publisher/nhs-digital')?.count).toBe(42);
@@ -266,6 +297,97 @@ describe('viewer helpers', () => {
     });
     expect(sourceDateLabel('2014-06-04T11:00:07Z')).toBe('4 Jun 2014');
     expect(relatedSeriesDatasets(current, [otherPublisher, earlier, current])).toEqual([earlier]);
+  });
+
+  it('distinguishes release coverage from catalogue timestamps and groups title releases for display', () => {
+    const april: LargeDataset = {
+      name: 'nsul-april-2018',
+      title: 'National Statistics UPRN Lookup (April 2018)',
+      publisher: 'ons',
+      metadata_modified: '2025-08-11'
+    };
+    const august: LargeDataset = {
+      name: 'nsul-august-2021',
+      title: 'National Statistics UPRN Lookup (August 2021)',
+      publisher: 'ons',
+      metadata_modified: '2025-08-11'
+    };
+
+    expect(datasetReleasePeriod(april)).toEqual({
+      label: 'Apr 2018',
+      sortKey: '2018-04',
+      year: '2018',
+      month: 4,
+      source: 'title',
+      catalogueFallback: false
+    });
+    expect(datasetDisplaySeries(april)).toEqual({
+      label: 'National Statistics UPRN Lookup',
+      key: 'presentation:national statistics uprn lookup',
+      inferred: true
+    });
+    expect(relatedDisplaySeriesDatasets(april, [april, august])).toEqual([august]);
+    expect(datasetDisplaySeries({
+      name: 'nsul-guide',
+      title: 'National Statistics UPRN Lookup (April 2024) (Epoch 108) User Guide'
+    }).label).toBe('National Statistics UPRN Lookup User Guide');
+  });
+
+  it('uses declared temporal coverage before a title or catalogue fallback', () => {
+    const declared: LargeDataset = {
+      name: 'release',
+      title: 'Release (April 2018)',
+      temporal_coverage: { start: '2020-06-01', end: '2020-06-30' },
+      metadata_modified: '2025-08-11'
+    };
+    const fallback: LargeDataset = {
+      name: 'undated',
+      title: 'Undated record',
+      metadata_modified: '2025-08-11'
+    };
+
+    expect(datasetReleasePeriod(declared)?.sortKey).toBe('2020-06');
+    expect(datasetReleasePeriod(declared)?.source).toBe('declared');
+    expect(datasetReleasePeriod(fallback)?.catalogueFallback).toBe(true);
+  });
+
+  it.each([
+    ['2026', '2026', 0],
+    ['2026-04', 'Apr 2026', 4],
+    ['2026-04-06', 'Apr 2026', 4]
+  ])('uses the explicit source release %s without a catalogue fallback or invented month', (date, label, month) => {
+    const dataset: LargeDataset = {
+      name: 'source-reference',
+      title: 'Handbook 2026/27',
+      published_at: '2026-09-15',
+      metadata_modified: '2026-09-16',
+      operational_metadata: { latest_release: { date: String(date), label: 'Referenced handbook publication' } }
+    };
+    expect(datasetReleasePeriod(dataset)).toEqual({
+      label, sortKey: String(date).slice(0, 7), year: '2026', month,
+      source: 'release', catalogueFallback: false
+    });
+    expect(datasetDateContext(dataset).updated).toBe('2026-09-16');
+    expect(datasetDateContext(dataset).updatedLabel).toBe('Catalogue metadata updated');
+  });
+
+  it.each([undefined, 'unknown', '2026-13', '2026-02-30', 'Released in April 2026'])('does not turn an absent or invalid release date %s into publication evidence', (date) => {
+    const dataset: LargeDataset = {
+      name: 'undated', title: 'Undated record',
+      operational_metadata: { latest_release: { date, dynamic: true, label: 'April 2026 expected' } }
+    };
+    expect(datasetReleasePeriod(dataset)).toBeNull();
+    expect(datasetReleasePeriod({ ...dataset, metadata_modified: '2026-09-15' })).toMatchObject({
+      sortKey: '2026-09', source: 'catalogue', catalogueFallback: true
+    });
+  });
+
+  it('retains declared coverage ahead of a distinct source release date', () => {
+    expect(datasetReleasePeriod({
+      name: 'historical-release', title: 'Historical observations',
+      temporal_coverage: '2024',
+      operational_metadata: { latest_release: { date: '2026-04' } }
+    })).toMatchObject({ sortKey: '2024', source: 'declared', catalogueFallback: false });
   });
 
   it('separates CKAN catalogue dates from evidence-backed operational metadata', () => {

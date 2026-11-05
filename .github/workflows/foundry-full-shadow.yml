@@ -1,0 +1,111 @@
+name: Evaluation Foundry nightly full shadow
+
+on:
+  schedule:
+    - cron: "41 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  adversarial-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Set up locked Python toolchain
+        uses: ./.github/actions/setup-locked-python
+      - name: Reject all reconstructed late-finding classes
+        run: >-
+          uv run --locked python scripts/check_heritage_adversarial.py
+          --output "$RUNNER_TEMP/adversarial-results.json"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: nightly-adversarial-gate-results
+          path: ${{ runner.temp }}/adversarial-results.json
+
+  browser-three-engine:
+    needs: adversarial-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 10.34.7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24.22.1'
+          cache: pnpm
+          cache-dependency-path: apps/okf-explorer/pnpm-lock.yaml
+      - name: Set up locked Python toolchain
+        uses: ./.github/actions/setup-locked-python
+      - working-directory: apps/okf-explorer
+        run: pnpm install --frozen-lockfile
+      - name: Materialise SvelteKit TypeScript configuration
+        working-directory: apps/okf-explorer
+        run: pnpm exec svelte-kit sync
+      - name: Validate and deterministically build Explorer
+        working-directory: apps/okf-explorer
+        env:
+          PLAYWRIGHT_CHROMIUM_CHANNEL: chrome
+        run: |
+          pnpm check
+          pnpm test
+          pnpm sbom:check
+          pnpm build:determinism
+      - name: Assemble Site for rendered Foundry pages
+        run: uv run --locked python scripts/build_site.py
+      - name: Select Ubuntu HTTPS archives for browser packages
+        timeout-minutes: 1
+        run: |
+          printf '%s\n' \
+            'https://archive.ubuntu.com/ubuntu/' \
+            'https://security.ubuntu.com/ubuntu/' \
+            | sudo tee /etc/apt/apt-mirrors.txt > /dev/null
+      - name: Install Firefox and WebKit browser dependencies
+        working-directory: apps/okf-explorer
+        timeout-minutes: 10
+        run: pnpm exec playwright install --with-deps firefox webkit
+      - name: Run full Chrome, Firefox and WebKit terminal assurance
+        working-directory: apps/okf-explorer
+        run: pnpm test:e2e:warwickshire:terminal
+
+  foundry-full-family:
+    needs: adversarial-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 10.34.7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24.22.1'
+          cache: pnpm
+          cache-dependency-path: apps/okf-explorer/pnpm-lock.yaml
+      - name: Set up locked Python toolchain
+        uses: ./.github/actions/setup-locked-python
+      - name: Install OKF Explorer dependencies
+        working-directory: apps/okf-explorer
+        run: pnpm install --frozen-lockfile
+      - name: Build exact Explorer identity for candidate checks
+        working-directory: apps/okf-explorer
+        run: pnpm build:determinism
+      - name: Run full Foundry and candidate checks
+        run: |
+          uv run --locked python scripts/check_evaluation_foundry.py
+          uv run --locked python scripts/retarget_heritage_source_snapshots.py --check
+          uv run --locked python scripts/build_heritage_evaluation.py --check --fixture all
+          uv run --locked python scripts/export_publication_unit.py --descriptor publication-units/heritage-coventry-warwickshire/publication-unit.json --check
+          uv run --locked python -m unittest discover -s tests
